@@ -4,7 +4,7 @@ Dependencies: C++17, CMake >=3.24, Git, SDL 2.30.11, LVGL 9.2.2, and vendored nl
 
 Official LVGL desktop guidance: https://lvgl.io/docs/open/9.2/integration/ide/pc-simulator.html . LVGL supports desktop simulation and interchangeable display/input drivers. This project supplies those small adapters explicitly.
 
-CMake supports standard FetchContent source overrides, e.g. `-DFETCHCONTENT_SOURCE_DIR_LVGL=D:/path/to/lvgl` and `-DFETCHCONTENT_SOURCE_DIR_SDL2=D:/path/to/SDL`, for offline source trees. Use a new build directory when changing compilers. CI builds the simulator and runs core, saved-game/storage, LVGL interaction, SDL smoke and separate-process recovery tests on Windows 2022.
+CMake supports standard FetchContent source overrides, e.g. `-DFETCHCONTENT_SOURCE_DIR_LVGL=D:/path/to/lvgl` and `-DFETCHCONTENT_SOURCE_DIR_SDL2=D:/path/to/SDL`, for offline source trees. Use a new build directory when changing compilers. CI builds the simulator and runs core, state-snapshot/profile-storage, LVGL interaction, SDL smoke and separate-process fresh-start tests on Windows 2022.
 
 The lightweight core test executable uses explicit checks, which remain active in Release. No hardware access or timing-dependent assertions are required.
 
@@ -22,9 +22,15 @@ npm exec --yes --package=lv_font_conv@1.5.3 -- lv_font_conv --font .deps/lvgl/sc
 
 The Montserrat license is included beside the generated font. The UI falls back to smaller native fonts for long totals, without scaling bitmap text.
 
-## Storage tests
+## Session and profile tests
 
-The SDL tests always use isolated save files in the build directory. `process_recovery` starts one real simulator process to create a four-player match at 49 life, closes it, then starts another process and clicks Continue to verify recovery. Neither process touches the normal per-user save. UI tests also cover explicit End Game disabling Continue, and storage tests verify the finished marker survives file replacement.
+Matches are RAM-only. `process_fresh_start` runs a real simulator match at 49 life, closes it, then opens a second process and verifies an inactive 40-life session with the same isolated device name. A seeded legacy match file stays unchanged. UI tests verify New Game-only startup, End Game, grouped Undo, reused curved glyphs and the single-cover transition. Profile storage still has interrupted-write/checksum fallback tests; installer tests never access physical hardware.
+
+## Rendering and timing probes
+
+The device's 30-second profiler separates history recording, Undo/Redo application and Undo-label layout from LCD transfer and frame processing. It records only on request and prints a bounded summary. Match saving and its experimental on/off switches have been removed permanently. See [firmware profiling](../firmware/README.md#on-demand-performance-capture) for the current command and metric limits.
+
+The version notes below describe historical iterations; their earlier saved-game/Continue behavior has been superseded by RAM-only matches.
 
 ## Interface and symbol verification
 
@@ -69,3 +75,5 @@ The clarified 0.14.2 keyboard layout keeps Back alone in the black center and pl
 The name keyboard places 123/ABC and DEL in the gaps above the letter rows, symmetrically beside Back, preserving the existing letter and Space positions. Existing all-character touch checks validate both modes after the move.
 
 Version 0.14.3 shows the local saved name above the upper icon on the Multi life face and swaps heart/skull and battery positions in all life-face modes. Longer names use the compact font to fit the ring. UI checks cover the own-name caption, new battery bands/touch position and upper skull position.
+
+The hardware multiplayer follow-up adds direct on-demand Wi-Fi: Host creates an open ARCANA access point, Join scans host SSIDs asynchronously, then resolves the live game after DHCP. The radio stays off in Single ARCANA and stops when browsing/joining is cancelled or a session is left. Reconnecting updates the guest's UDP endpoint without discarding queued edits or claiming a second seat. Native radio tests cover delayed readiness, late admission, synchronized life, changed endpoints and cancellation. `tools/test_device_network.py` provides an isolated RAM-only two-device USB test; see the firmware guide for actual hardware verification status.

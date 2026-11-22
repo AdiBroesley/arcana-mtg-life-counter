@@ -13,7 +13,73 @@ void check(bool ok,const char* description){if(!ok){std::cerr<<description<<'\n'
 class Memory final:public IStorage {public:std::string data;bool fail=false;bool load(std::string& out,std::string&)override{out=data;return true;}bool save(const std::string& value,std::string& error)override{if(fail){error="Disk full";return false;}data=value;return true;}};
 struct Bus {std::map<std::string,std::deque<PeerPacket>> queues;bool duplicate=false,dropCommands=false;std::string lastCommand;};
 class Wire final:public IPeerTransport {public:Bus& bus;std::string address,empty;Wire(Bus& bus,std::string address):bus(bus),address(address){bus.queues[address];}bool send(const std::string& destination,const std::string& data)override{if(data.find("\"t\":\"cmd\"")!=std::string::npos)bus.lastCommand=data;if(bus.dropCommands&&data.find("\"t\":\"cmd\"")!=std::string::npos)return true;auto deliver=[&](const std::string& target){bus.queues[target].push_back({address,data});if(bus.duplicate)bus.queues[target].push_back({address,data});};if(destination=="discovery"){for(const auto& entry:bus.queues)if(entry.first!=address)deliver(entry.first);}else deliver(destination);return true;}std::vector<PeerPacket> receive()override{std::vector<PeerPacket> result;auto& queue=bus.queues[address];while(!queue.empty()){result.push_back(queue.front());queue.pop_front();}return result;}const std::string& error()const override{return empty;}};
+class Radio final:public IPeerTransport {
+public:
+ Wire wire;bool ready=false,browsing=false,stopped=true;std::string selected;
+ std::vector<PeerNetwork> visible;
+ Radio(Bus& bus,std::string name):wire(bus,name){}
+ bool hostNetwork(const std::string&)override{ready=true;stopped=false;return true;}
+ void browseNetworks()override{browsing=true;stopped=false;}
+ bool joinNetwork(const std::string& id)override{selected=id;stopped=false;return true;}
+ void stopNetwork()override{ready=browsing=false;selected.clear();stopped=true;}
+ bool networkReady()const override{return ready;}
+ bool radioDiscovery()const override{return true;}
+ std::vector<PeerNetwork> networks()const override{return visible;}
+ bool send(const std::string& endpoint,const std::string& data)override{return ready&&wire.send(endpoint,data);}
+ std::vector<PeerPacket> receive()override{return ready?wire.receive():std::vector<PeerPacket>{};}
+ const std::string& error()const override{return wire.error();}
+};
+void powerNetworkTests(){
+ Bus bus;Wire a(bus,"power-host"),b(bus,"power-guest");
+ DeviceProfile pa,pb;pa.setName("HOST");pb.setName("GUEST");GameState ga,gb;
+ Multiplayer host(ga,pa,a),guest(gb,pb,b);
+ check(host.host(GameFormat::Commander,4)&&host.start(),"power test creates a running game");
+ guest.discover();host.tick(10);guest.tick(10);check(guest.join(0),"power test joins");
+ host.tick(20);guest.tick(20);check(guest.connected(),"power test admitted");
+ // Empty the discovery reply and verify that idle traffic no longer runs at 300 ms.
+ a.receive();b.receive();host.tick(21);guest.tick(21);a.receive();b.receive();
+ for(unsigned now=40;now<1000;now+=20){host.tick(now);guest.tick(now);}
+ check(a.receive().empty()&&b.receive().empty(),"idle heartbeat must wait a full second");
+ auto revision=guest.revision();host.tick(1020);guest.tick(1020);
+ check(guest.revision()==revision,"unchanged heartbeat must not redraw the guest UI");
+ ga.adjustLife(-2);host.tick(1021);guest.tick(1021);
+ check(guest.opponents()[0].life==38,"host edit broadcasts on its first tick");
+ gb.adjustLife(-3);guest.tick(1022);host.tick(1022);guest.tick(1022);
+ check(host.opponents()[0].life==37,"guest edit sends on its first tick, even just after a heartbeat");
+ gb.adjustLife(-1);guest.tick(1023);host.tick(1023);guest.tick(1023);
+ check(host.opponents()[0].life==36,"next acknowledged command sends without waiting for a retry timer");
+ bus.dropCommands=true;gb.adjustLife(-4);guest.tick(1024);host.tick(1024);
+ bus.dropCommands=false;
+ guest.tick(1323);check(a.receive().empty(),"lost edits must not retry before 300 ms");
+ guest.tick(1324);host.tick(1324);guest.tick(1324);
+ check(host.opponents()[0].life==32&&gb.player().life==32,"lost edit retries after 300 ms and converges");
+ host.leave();guest.leave();
+}
+void radioTests(){
+ Bus bus;Radio a(bus,"radio-host"),b(bus,"radio-guest");DeviceProfile pa,pb;pa.setName("ALICE");pb.setName("BOB");GameState ga,gb;Multiplayer host(ga,pa,a),guest(gb,pb,b);
+ check(host.host(GameFormat::Commander,4)&&a.ready,"host creates radio network");check(host.start(),"radio host can start with open slots");ga.adjustLife(-3);
+ guest.discover();b.visible={{"ARCANA-ALICE-aabbcc","ALICE"}};guest.tick(100);
+ check(b.browsing&&guest.lobbies().size()==1,"unconnected radio discovers SSID host names");
+ check(guest.join(0)&&guest.attached()&&!guest.connected(),"radio join remains attached while DHCP is pending");
+ check(b.selected=="ARCANA-ALICE-aabbcc","join selects the advertised radio network");
+ guest.tick(500);check(!guest.connected(),"no gameplay admission before radio connection");
+ b.ready=true;
+ for(std::uint64_t now=1000;now<4000;now+=100){host.tick(now);guest.tick(now);}
+ check(guest.connected()&&guest.started()&&host.players().size()==2,"radio handshake resolves real game ID after DHCP");
+ gb.adjustLife(-5);
+ for(std::uint64_t now=4000;now<6000;now+=100){host.tick(now);guest.tick(now);}
+ check(ga.player().life==37&&gb.player().life==35&&host.opponents()[0].life==35,"late radio join preserves host life and synchronizes edits");
+ b.ready=false;guest.tick(6000);gb.adjustLife(-2);guest.tick(6100);
+ b.wire.address="radio-guest-reconnected";bus.queues[b.wire.address];b.ready=true;
+ for(std::uint64_t now=6200;now<8200;now+=100){host.tick(now);guest.tick(now);}
+ check(guest.connected()&&host.players().size()==2&&gb.player().life==33&&host.opponents()[0].life==33,"radio reconnect replaces the endpoint and preserves queued edits without claiming another seat");
+ guest.leave();check(b.stopped&&!guest.attached(),"leaving powers off guest radio");
+ guest.discover();guest.tick(8300);check(guest.join(0),"radio can reconnect to same SSID");guest.leave();
+ b.ready=true;guest.tick(9000);check(!guest.attached()&&!guest.connected(),"cancelled network join cannot admit a stale reply");
+ host.leave();check(a.stopped,"leaving powers off host radio");
+}
 int main(int argc,char** argv){
+ powerNetworkTests();radioTests();
  if(argc>1&&(std::string(argv[1])=="--lan-host"||std::string(argv[1])=="--lan-client")){
   bool server=std::string(argv[1])=="--lan-host";LanTransport transport(42690);check(transport.error().empty(),"process LAN socket initialization");DeviceProfile profile;profile.setName(server?"NETTESTHOST":"NETTESTJOIN");GameState game;Multiplayer session(game,profile,transport);if(server){check(session.host(GameFormat::Classic,2),"process host lobby");check(session.start(),"process host starts before client arrives");game.adjustLife(-3);}else session.discover();bool changed=false,wasStarted=false;
   auto beginning=std::chrono::steady_clock::now();

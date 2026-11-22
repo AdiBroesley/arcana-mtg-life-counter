@@ -31,7 +31,7 @@ void nonblocking(SOCKET socket){
 bool endpoint(const std::string& value,sockaddr_in& address){auto colon=value.rfind(':');if(colon==std::string::npos)return false;try{auto port=std::stoul(value.substr(colon+1));if(!port||port>65535)return false;address={};address.sin_family=AF_INET;address.sin_port=htons(static_cast<unsigned short>(port));return inet_pton(AF_INET,value.substr(0,colon).c_str(),&address.sin_addr)==1;}catch(...){return false;}}
 }
 struct LanTransport::Impl {SOCKET data=INVALID_SOCKET,discovery=INVALID_SOCKET;std::string error;unsigned short port=0,discoveryPort=42688;bool initialized=false;};
-LanTransport::LanTransport(unsigned short discoveryPort):impl_(new Impl){
+LanTransport::LanTransport(unsigned short discoveryPort,const std::string& interfaceAddress):impl_(new Impl){
  impl_->discoveryPort=discoveryPort;
 #ifdef _WIN32
  WSADATA data;if(WSAStartup(MAKEWORD(2,2),&data)){impl_->error="Network initialization failed";return;}
@@ -49,6 +49,8 @@ LanTransport::LanTransport(unsigned short discoveryPort):impl_(new Impl){
  int reuse=1;setsockopt(impl_->discovery,SOL_SOCKET,SO_REUSEADDR,reinterpret_cast<const char*>(&reuse),sizeof(reuse));address.sin_port=htons(discoveryPort);
  if(bind(impl_->discovery,reinterpret_cast<sockaddr*>(&address),sizeof(address))){impl_->error="Cannot open LAN discovery";return;}
  ip_mreq membership{};inet_pton(AF_INET,multicast,&membership.imr_multiaddr);membership.imr_interface.s_addr=htonl(INADDR_ANY);
+ if(!interfaceAddress.empty()&&inet_pton(AF_INET,interfaceAddress.c_str(),&membership.imr_interface)!=1){impl_->error="Invalid LAN interface";return;}
+ if(!interfaceAddress.empty()&&setsockopt(impl_->data,IPPROTO_IP,IP_MULTICAST_IF,reinterpret_cast<const char*>(&membership.imr_interface),sizeof(membership.imr_interface))){impl_->error="Cannot select LAN interface";return;}
  if(setsockopt(impl_->discovery,IPPROTO_IP,IP_ADD_MEMBERSHIP,reinterpret_cast<const char*>(&membership),sizeof(membership))){impl_->error="LAN discovery unavailable";return;}
  unsigned char ttl=1,loop=1;setsockopt(impl_->data,IPPROTO_IP,IP_MULTICAST_TTL,reinterpret_cast<const char*>(&ttl),sizeof(ttl));setsockopt(impl_->data,IPPROTO_IP,IP_MULTICAST_LOOP,reinterpret_cast<const char*>(&loop),sizeof(loop));nonblocking(impl_->data);nonblocking(impl_->discovery);
 }

@@ -7,7 +7,6 @@
 #include "LanTransport.hpp"
 #include "core/DeviceProfile.hpp"
 #include "core/Multiplayer.hpp"
-#include "core/SessionPersistence.hpp"
 #include <vector>
 #include <iostream>
 #include <string>
@@ -19,7 +18,7 @@ SDL_Texture* texture;
 mtg::SimulatorHardware hardware;
 mtg::GameState game;
 mtg::AppUI* app;
-mtg::SessionPersistence* persistence;
+mtg::Multiplayer* network;
 lv_obj_t* logLabel;
 lv_obj_t* device;
 std::vector<uint32_t> pixels(W*H);
@@ -41,9 +40,9 @@ lv_obj_t* text(lv_obj_t* parent,const char* value,int x,int y,unsigned color=0xc
 void event(lv_event_t* e) {
  auto action=reinterpret_cast<intptr_t>(lv_event_get_user_data(e));
  if(action==1 || action==-1) { hardware.rotate(static_cast<int>(action)); lv_label_set_text(logLabel,action==1 ? "Encoder: +1" : "Encoder: -1"); }
- if(action==2) { if(hardware.powered())persistence->flush(); hardware.togglePower(); lv_obj_set_style_opa(device,hardware.powered()?255:0,0); lv_label_set_text(logLabel,hardware.powered()?"Power: on":"Power: off"); }
+ if(action==2) { hardware.togglePower(); lv_obj_set_style_opa(device,hardware.powered()?255:0,0); lv_label_set_text(logLabel,hardware.powered()?"Power: on":"Power: off"); }
  if(action==3 && hardware.powered()) { app->requestNewGame(); lv_label_set_text(logLabel,"New game setup"); }
- if(action==4) { persistence->flush();persistence->load();app->showStartup(); if(!hardware.powered()) hardware.togglePower(); lv_obj_set_style_opa(device,255,0); lv_label_set_text(logLabel,"Restart: saved session loaded"); }
+ if(action==4) { network->leave();game=mtg::GameState{};hardware.setTouch({});app->showStartup(); if(!hardware.powered()) hardware.togglePower(); lv_obj_set_style_opa(device,255,0); lv_label_set_text(logLabel,"Restart: new session"); }
  app->update();
 }
 void button(lv_obj_t* parent,const char* value,int x,int y,intptr_t action) {
@@ -54,25 +53,21 @@ void button(lv_obj_t* parent,const char* value,int x,int y,intptr_t action) {
 }
 }
 int main(int argc,char** argv) {
- bool smoke=false,resumeSmoke=false;std::string saveFile,profileFile;
+ bool smoke=false,startupSmoke=false;std::string profileFile;
  for(int i=1;i<argc;++i) {
   std::string arg=argv[i];if(arg=="--smoke-test")smoke=true;
-  else if(arg=="--resume-test"){smoke=true;resumeSmoke=true;}
+  else if(arg=="--startup-test"){smoke=true;startupSmoke=true;}
   else if(arg=="--profile-file" && i+1<argc)profileFile=argv[++i];
-  else if(arg=="--save-file" && i+1<argc)saveFile=argv[++i];
-  else {std::cerr<<"Usage: mtg_simulator [--smoke-test | --resume-test] [--save-file path] [--profile-file path]\n";return 2;}
+  else {std::cerr<<"Usage: mtg_simulator [--smoke-test | --startup-test] [--profile-file path]\n";return 2;}
  }
  SDL_SetMainReady();
  if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER)!=0) { std::cerr<<SDL_GetError();return 1; }
- if(saveFile.empty()) {
-  if(smoke)saveFile="simulator-smoke-session.json";
-  else {char* pref=SDL_GetPrefPath("Arcana","MTGLifeCounter");if(!pref){std::cerr<<SDL_GetError();SDL_Quit();return 1;}saveFile=std::string(pref)+"current-game.json";SDL_free(pref);}
+ if(profileFile.empty()) {
+  if(smoke)profileFile="simulator-smoke-profile.json";
+  else {char* pref=SDL_GetPrefPath("Arcana","MTGLifeCounter");if(!pref){std::cerr<<SDL_GetError();SDL_Quit();return 1;}profileFile=std::string(pref)+"current-game-profile.json";SDL_free(pref);}
  }
- if(profileFile.empty()){auto path=std::filesystem::u8path(saveFile);profileFile=(path.parent_path()/(path.stem().string()+"-profile.json")).string();}
  mtg::FileStorage profileStorage(std::filesystem::u8path(profileFile));mtg::DeviceProfile profile(&profileStorage);if(!profile.load())std::cerr<<profile.error()<<'\n';
- mtg::LanTransport transport;mtg::Multiplayer multiplayer(game,profile,transport);
- mtg::FileStorage storage(std::filesystem::u8path(saveFile));mtg::SessionPersistence session(game,storage);persistence=&session;
- if(!session.load())std::cerr<<session.error()<<'\n';
+ mtg::LanTransport transport;mtg::Multiplayer multiplayer(game,profile,transport);network=&multiplayer;
  auto* window=SDL_CreateWindow("MTG Life Counter | Digital Twin 0.14.3",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,smoke?SDL_WINDOW_HIDDEN:SDL_WINDOW_SHOWN);
  if(!window) { std::cerr<<SDL_GetError();SDL_Quit();return 1; }
  renderer=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);
@@ -94,7 +89,7 @@ int main(int argc,char** argv) {
  text(root,"YOUR ARCANA SESSION",32,136,0x00d8ff);
  auto* stats=text(root,"",32,173);
  lv_obj_set_width(stats,216);lv_label_set_long_mode(stats,LV_LABEL_LONG_WRAP);
- text(root,"P1 life / named network peers\nApp 0.14.3 / SDL2",32,318,0x81a5b7);
+ text(root,"P1 life / named network peers\nApp 0.15.1 / SDL2",32,318,0x81a5b7);
  text(root,"INPUT",32,398,0x00d8ff);
  text(root,"Wheel / arrows: adjust\nTap a tracker to edit\nTab: trackers\nCtrl+Z / Y: undo / redo\nP: power / R: new game\nEsc: close",32,431);
  auto* bezel=lv_obj_create(root);lv_obj_set_pos(bezel,290,91);lv_obj_set_size(bezel,420,420);
@@ -126,13 +121,13 @@ text(root,"LATEST EVENT",780,477,0x00d8ff);logLabel=text(root,"Ready",780,506);
     if(hardware.powered() && key==SDLK_TAB)app->openTrackers();
     if(hardware.powered() && (e.key.keysym.mod & KMOD_CTRL) && key==SDLK_z)app->undo();
     if(hardware.powered() && (e.key.keysym.mod & KMOD_CTRL) && key==SDLK_y)app->redo();
-    if(key==SDLK_p) {if(hardware.powered())session.flush();hardware.togglePower();lv_obj_set_style_opa(device,hardware.powered()?255:0,0);}
+    if(key==SDLK_p) {hardware.togglePower();lv_obj_set_style_opa(device,hardware.powered()?255:0,0);}
    }
    if(e.type==SDL_MOUSEBUTTONDOWN||e.type==SDL_MOUSEBUTTONUP) if(e.button.button==SDL_BUTTON_LEFT) hardware.setTouch({e.button.x,e.button.y,e.type==SDL_MOUSEBUTTONDOWN});
    if(e.type==SDL_MOUSEMOTION) hardware.setTouch({e.motion.x,e.motion.y,(e.motion.state&SDL_BUTTON_LMASK)!=0});
    if(e.type==SDL_WINDOWEVENT && e.window.event==SDL_WINDOWEVENT_FOCUS_LOST) hardware.setTouch({});
   }
-  auto now=SDL_GetTicks();lv_tick_inc(smoke?20:now-last);last=now;ui.update();lv_obj_set_style_opa(device,hardware.powered()?hardware.brightness()*255/100:0,0);lv_timer_handler();session.tick(SDL_GetTicks64());if(!hardware.powered())session.flush();ui.setStorageError(session.error());
+  auto now=SDL_GetTicks();lv_tick_inc(smoke?20:now-last);last=now;ui.update();lv_obj_set_style_opa(device,hardware.powered()?hardware.brightness()*255/100:0,0);lv_timer_handler();
   std::string summary=std::string(game.state().active?"MATCH IN PROGRESS":"NO ACTIVE MATCH")+"\nPlayers   "+std::to_string(game.state().playerCount)+"\nLife   "+std::to_string(game.player().life)+"\nPoison   "+std::to_string(game.player().counters[0])+" / "+std::to_string(game.state().poisonLimit)+"\nSources   "+std::to_string(game.state().sources.size())+"\nUndoable actions   "+std::to_string(game.historyCursor());
   if(summary!=lv_label_get_text(stats))lv_label_set_text(stats,summary.c_str());
   SDL_UpdateTexture(texture,nullptr,pixels.data(),W*4);SDL_RenderClear(renderer);SDL_RenderCopy(renderer,texture,nullptr,nullptr);SDL_RenderPresent(renderer);
@@ -140,10 +135,8 @@ text(root,"LATEST EVENT",780,477,0x00d8ff);logLabel=text(root,"Ready",780,506);
    ++frames;
    // Exercise startup, the default four-player setup, wheel and both touch transports.
    auto pointer=[&](bool pressed,int x,int y){SDL_Event e{};e.type=pressed?SDL_MOUSEBUTTONDOWN:SDL_MOUSEBUTTONUP;e.button.button=SDL_BUTTON_LEFT;e.button.x=x;e.button.y=y;SDL_PushEvent(&e);};
-   if(resumeSmoke) {
-    if(frames==4)pointer(true,500,358);if(frames==10)pointer(false,500,358);
-   }else {
-   if(frames==4)pointer(true,500,292);if(frames==10)pointer(false,500,292);
+   if(!startupSmoke) {
+   if(frames==4)pointer(true,500,288);if(frames==10)pointer(false,500,288);
    if(frames==16)pointer(true,500,211);if(frames==22)pointer(false,500,211);
    if(frames==28)pointer(true,500,201);if(frames==34)pointer(false,500,201);
    if(frames==40)pointer(true,500,421);if(frames==46)pointer(false,500,421);
@@ -157,13 +150,14 @@ text(root,"LATEST EVENT",780,477,0x00d8ff);logLabel=text(root,"Ready",780,506);
   }
   SDL_Delay(smoke?1:5);
  }
- int result=session.flush()?0:1;
- if(result)std::cerr<<"Save failed: "<<session.error()<<'\n';
+ int result=0;
  if(smoke) {
-  if(game.player().life!=49 || !game.state().active || game.state().playerCount!=4 || game.player().counters[static_cast<unsigned>(mtg::Counter::Treasure)]!=1 || flushes==0) result=1;
+  if(startupSmoke){if(game.state().active||game.player().life!=40||game.canUndo()||flushes==0)result=1;}
+  else if(game.player().life!=49 || !game.state().active || game.state().playerCount!=4 || game.player().counters[static_cast<unsigned>(mtg::Counter::Treasure)]!=1 || flushes==0) result=1;
   auto* surface=SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(),W,H,32,W*4,SDL_PIXELFORMAT_ARGB8888);
-  if(surface) {SDL_SaveBMP(surface,resumeSmoke?"simulator-resume.bmp":"simulator-smoke.bmp");SDL_FreeSurface(surface);}
+  if(surface) {SDL_SaveBMP(surface,startupSmoke?"simulator-fresh-start.bmp":"simulator-smoke.bmp");SDL_FreeSurface(surface);}
   std::cout<<"Smoke: life="<<game.player().life<<", LVGL flushes="<<flushes<<'\n';
+  std::cout<<"Smoke profile="<<profile.name()<<'\n';
  }
  lv_deinit();SDL_DestroyTexture(texture);SDL_DestroyRenderer(renderer);SDL_DestroyWindow(window);SDL_Quit();return result;
 }

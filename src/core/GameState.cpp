@@ -1,4 +1,5 @@
 #include "GameState.hpp"
+#include "platform/IProfiler.hpp"
 #include <algorithm>
 #include <limits>
 #include <utility>
@@ -24,6 +25,7 @@ const char* counterName(Counter counter) {
  const auto i=static_cast<unsigned>(counter); return i<counterCount ? names[i] : "COUNTER";
 }
 bool GameState::commit(GameSnapshot next, std::string description) {
+ ScopedWork timing(profiler_,Work::HistoryRecord);
  if(next.format==GameFormat::TwoHeadedGiant){next.opponentLife[0]=next.player.life;for(unsigned seat=3;seat<next.playerCount;seat+=2)next.opponentLife[seat-1]=next.opponentLife[seat-2];}
 
  if(actionTime_) {
@@ -87,6 +89,7 @@ std::string GameState::recentUndoLabel(std::uint64_t now) const {
  return "Undo "+std::to_string(static_cast<unsigned>(recent_.end()-it))+" edits";
 }
 bool GameState::undoRecent(std::uint64_t now) {
+ ScopedWork timing(profiler_,Work::UndoApply);
  while(!recent_.empty()&&(now<recent_.front().time||now-recent_.front().time>5000))recent_.pop_front();
  if(recent_.empty())return false;
  auto before=recent_.front().before;auto after=state_;
@@ -207,8 +210,8 @@ bool GameState::commanderWarning() const {
  if(!usesCommanderDamage(state_.format))return false;
  for(const auto& s:state_.sources) if(s.damage>=21) return true;return false;
 }
-bool GameState::undo() { if(!canUndo()) return false;if(!recent_.empty())recent_.pop_back();state_=history_[--cursor_].before;++revision_;return true; }
-bool GameState::redo() { if(!canRedo()) return false;
+bool GameState::undo() { ScopedWork timing(profiler_,Work::UndoApply);if(!canUndo()) return false;if(!recent_.empty())recent_.pop_back();state_=history_[--cursor_].before;++revision_;return true; }
+bool GameState::redo() { ScopedWork timing(profiler_,Work::UndoApply);if(!canRedo()) return false;
  if(actionTime_) {
   while(!recent_.empty()&&(*actionTime_<recent_.front().time||*actionTime_-recent_.front().time>5000))recent_.pop_front();
   recent_.push_back({state_,*actionTime_});

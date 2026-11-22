@@ -4,23 +4,27 @@
 #include "core/RandomTools.hpp"
 #include "core/Multiplayer.hpp"
 #include "platform/IHardware.hpp"
+#include "platform/IFirmwareUpdate.hpp"
 #include "Widgets/ToolIcons.hpp"
 #include <deque>
 namespace mtg {
 class AppUI {
 public:
- AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile=nullptr,Multiplayer* multiplayer=nullptr);
+ AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile=nullptr,Multiplayer* multiplayer=nullptr,IFirmwareUpdate* updates=nullptr);
  void update();
+ bool lastUpdateDidWork()const{return lastUpdateWork_;}
  void goHome();
  void openTrackers() { if(game_.state().active) navigate(View::Menu); }
  void showStartup() { navigate(View::Startup); }
  void requestNewGame();
- void setStorageError(const std::string& error);
  void undo() { handle(Undo,0); }
  void redo() { handle(Redo,0); }
+ struct RenderTrial {unsigned phase;std::uint64_t micros;};
+ // USB-only controlled comparison. Requires the single-player main life face.
+ std::vector<RenderTrial> benchmarkUndoDrawing();
 private:
- enum class View { Startup, ArcanaMode, NameSetup, HostJoin, BrowseGames, NetworkLobby, FormatSelect, PlayerSetup, EndConfirm, Gear, Brightness, ResetConfirm, CoinResult, RollResult, CounterPicker, Home, Menu, Counter, Sources, Damage, Commanders, Casts, Profiles, Status, History, Rename, AddSource, Threshold };
- enum Action { SingleArcana,MultiArcana,NameKey,NameChange,NameDelete,NameSpace,NameSymbols,NameConfirm,HostGame,FindGames,JoinGame,RefreshGames,NextGames,StartNetwork, ToggleRecipient, ChooseFormat, NoAction, OpenBrightness, ToolBack, SideStep, OpenPicker, ChooseShortcut, RecentUndo, OpenGear, AskReset, ResetYes, ResetNo, FlipCoin, RollD20, NewGame, ContinueGame, ConfirmPlayers, SelectPlayer, CycleSource, CloseDial, RequestEnd, FinishGame, CancelEnd, Back, Menu, Minus, Plus, OpenCounter, OpenSources, OpenOwn, OpenProfiles, OpenStatus,
+ enum class View { ContactCode, About, Updates, WifiSetup, Startup, ArcanaMode, NameSetup, HostJoin, BrowseGames, NetworkLobby, FormatSelect, PlayerSetup, EndConfirm, Gear, Brightness, ResetConfirm, CoinResult, RollResult, CounterPicker, Home, Menu, Counter, Sources, Damage, Commanders, Casts, Profiles, Status, History, Rename, AddSource, Threshold };
+ enum Action { ContactLink, OpenAbout, OpenUpdates, CheckUpdate, InstallUpdate, SetupWifi, SingleArcana,MultiArcana,NameKey,NameChange,NameDelete,NameSpace,NameSymbols,NameConfirm,HostGame,FindGames,JoinGame,RefreshGames,NextGames,StartNetwork, ToggleRecipient, ChooseFormat, NoAction, OpenBrightness, ToolBack, SideStep, OpenPicker, ChooseShortcut, RecentUndo, OpenGear, AskReset, ResetYes, ResetNo, FlipCoin, RollD20, NewGame, ConfirmPlayers, SelectPlayer, CycleSource, CloseDial, RequestEnd, FinishGame, CancelEnd, Back, Menu, Minus, Plus, OpenCounter, OpenSources, OpenOwn, OpenProfiles, OpenStatus,
   OpenHistory, Undo, Redo, Apply, Mode, NewSource, CreateSource, NewOwn, NewTurn, Rename,
   Append, Delete, SaveName, Limit, ToggleCounter, Source, Own, ToggleStatus, Day };
  struct Binding { AppUI* ui; Action action; std::uint32_t arg; double sectorStart=0,sectorSpan=0; };
@@ -53,6 +57,8 @@ private:
  void refreshBattery();
  void curvedUndoText(const std::string& value);
  void buildLifecycle();
+ void buildInformation();
+ void refreshInformation();
  void beginFormatSelection(View returnTo);
  void refreshLifecycle();
  void playerTabs();
@@ -70,11 +76,14 @@ private:
  void partialDividers();
  lv_obj_t* bigValue(int y=115);
  void stepButtons(int y=216);
+ IFirmwareUpdate* updates_;UpdateStatus updateStatus_;std::uint64_t updateRevision_=UINT64_MAX;
+ lv_obj_t* updateButton_=nullptr;lv_obj_t* newGameButton_=nullptr;
  DeviceProfile fallbackProfile_;DeviceProfile* profile_;Multiplayer* multiplayer_;
- std::string nameDraft_,networkSignature_;bool nameSymbols_=false,hostPending_=false;unsigned lobbyPage_=0;View arcanaReturn_=View::Startup;
+ std::string nameDraft_,networkSignature_;bool nameSymbols_=false,hostPending_=false;unsigned lobbyPage_=0;View arcanaReturn_=View::Startup;View informationReturn_=View::Startup;
  GameState& game_;
  IHardware& hardware_;
  IRandom& random_;
+ unsigned contactLink_=0;
  unsigned pickerSide_=0;
  bool coinHeads_=false;
  StarterRoll starterRoll_;
@@ -91,12 +100,15 @@ private:
  std::int64_t pending_=1;
  unsigned owner_=2, character_=0, selectedPlayer_=1, draftPlayers_=4;
  std::array<lv_obj_t*,12> tabValues_{};
- std::string storageError_,undoCurvedText_;
- bool subtractLife_=true, rebuild_=true;
+ std::string undoCurvedText_;
+ bool freezeUndoCaption_=false;
+ bool subtractLife_=true, rebuild_=true, refreshDirty_=true, lastUpdateWork_=false;
  bool transitionPending_=false,transitionActive_=false;
- std::uint32_t transitionStarted_=0,transitionFrame_=0,contentFirst_=0;
+ std::uint32_t transitionStarted_=0,transitionFrame_=0;
+ lv_obj_t* fadeCover_=nullptr;
  std::string draft_, notice_;
  std::uint64_t revision_=0;
+ std::uint64_t networkRevision_=0;
  std::deque<Binding> bindings_;
  std::deque<std::array<lv_point_precise_t,2>> tabEdgePoints_;
  int batteryState_=-2;

@@ -1,10 +1,12 @@
 #include "AppUI.hpp"
+#include "platform/IProfiler.hpp"
 #include "Widgets/DialWidgets.hpp"
 #include "Widgets/ToolIcons.hpp"
 // LVGL 9.2 keeps its custom hit-test payload in this pinned-version header.
 #include "src/core/lv_obj_event_private.h"
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 LV_FONT_DECLARE(life_digits);
 LV_FONT_DECLARE(heart_symbol);
 LV_FONT_DECLARE(tab_font);
@@ -93,10 +95,10 @@ void AppUI::buildLifecycle() {
  if(view_==View::Startup) {
   label(screen_,"A R C A N A",65,67,230,&lv_font_montserrat_20,violet);
   label(screen_,"LIFE COUNTER",55,103,250,&lv_font_montserrat_14,muted);
-  button(screen_,"New game",83,147,194,48,NewGame);
-  auto* resume=button(screen_,"Continue",83,213,194,48,ContinueGame);
-  if(!game_.state().active)lv_obj_add_state(resume,LV_STATE_DISABLED);
-  hint_=label(screen_,"",65,283,230,&lv_font_montserrat_14,muted);
+  newGameButton_=button(screen_,"New Game",83,145,194,44,NewGame);
+  updateButton_=button(screen_,"Update",83,202,194,40,OpenUpdates);
+  button(screen_,"About",103,255,154,36,OpenAbout);
+  detail_=label(screen_,"",70,304,220,&lv_font_montserrat_14,muted);
  }else if(view_==View::FormatSelect) {
   const unsigned colors[]{0x7c58ba,0x468ca9,0x349353,0xb18038,0x607eb1};
   const ToolIcon icons[]{ToolIcon::Shield,ToolIcon::D20,ToolIcon::LifeLink,ToolIcon::Reset,ToolIcon::Coin};
@@ -116,11 +118,12 @@ void AppUI::buildLifecycle() {
  }
 }
 void AppUI::refreshLifecycle() {
- if(view_==View::PlayerSetup){text(value_,draftFormat_==GameFormat::TwoHeadedGiant?std::to_string(draftPlayers_/2)+" Teams / "+std::to_string(draftPlayers_)+"P":std::to_string(draftPlayers_)+"-Players");if(hint_)text(hint_,notice_);}
- if(view_==View::Startup) {
-  text(hint_,!storageError_.empty()?"SAVE ERROR / match not saved":game_.state().active?"Unfinished match ready":"Ready for a new match");
-  lv_obj_set_style_text_color(hint_,lv_color_hex(storageError_.empty()?muted:red),0);
+ if(view_==View::Startup){
+  if(updateStatus_.phase==UpdatePhase::Available)lv_obj_remove_state(updateButton_,LV_STATE_DISABLED);else lv_obj_add_state(updateButton_,LV_STATE_DISABLED);
+  text(detail_,updateStatus_.phase==UpdatePhase::Available?"Version "+updateStatus_.latest+" available":updateStatus_.busy()?"Checking for updates...":updateStatus_.phase==UpdatePhase::Current?"Up to date":"Wi-Fi & updates in About");
  }
+
+ if(view_==View::PlayerSetup){text(value_,draftFormat_==GameFormat::TwoHeadedGiant?std::to_string(draftPlayers_/2)+" Teams / "+std::to_string(draftPlayers_)+"P":std::to_string(draftPlayers_)+"-Players");if(hint_)text(hint_,notice_);}
 }
 void AppUI::buildDial() {
  if(selectedPlayer_==1)playerTabs();
@@ -156,11 +159,21 @@ void AppUI::buildDial() {
   lv_obj_set_style_radius(gear,LV_RADIUS_CIRCLE,0);lv_obj_set_style_pad_all(gear,0,0);lv_obj_set_style_border_color(gear,lv_color_hex(violet),0);
   auto* glyph=lv_obj_get_child(gear,0);lv_obj_set_style_text_font(glyph,&lv_font_montserrat_32,0);
   lv_obj_set_width(glyph,LV_SIZE_CONTENT);lv_obj_set_height(glyph,LV_SIZE_CONTENT);lv_obj_center(glyph);
-  undoArc_=arc(screen_,326,17,60,120,0x303c43,29);
-  undo_=button(screen_,"Undo",17,17,326,326,RecentUndo);
+  // Keep the circular geometry, but clip its invalidation to the visible bottom
+  // sector. State/style changes on a full-circle target otherwise repaint the face.
+  auto* undoClip=box(screen_,17,290,326,60);
+  lv_obj_set_style_bg_opa(undoClip,0,0);lv_obj_set_style_radius(undoClip,0,0);lv_obj_remove_flag(undoClip,LV_OBJ_FLAG_CLICKABLE);
+  undoArc_=arc(undoClip,326,-273,60,120,0x303c43,29);lv_obj_set_x(undoArc_,0);
+  undo_=button(undoClip,"Undo",0,-273,326,326,RecentUndo);
+  // This is an invisible hit target, so remove the button theme (including its
+  // delayed state animations) and restore only the required geometry/styles.
+  lv_obj_remove_style_all(undo_);lv_obj_set_pos(undo_,0,-273);lv_obj_set_size(undo_,326,326);
   lv_obj_set_style_bg_opa(undo_,0,0);lv_obj_set_style_bg_opa(undo_,0,LV_STATE_PRESSED);lv_obj_set_style_bg_opa(undo_,0,LV_STATE_DISABLED);lv_obj_set_style_border_width(undo_,0,0);lv_obj_set_style_radius(undo_,0,0);lv_obj_set_style_pad_all(undo_,0,0);
+  // Dim only the glyphs, rather than alpha-compositing this 326px touch target.
+  lv_obj_set_style_opa(undo_,LV_OPA_COVER,LV_STATE_DISABLED);
   lv_obj_add_flag(undo_,LV_OBJ_FLAG_ADV_HITTEST);lv_obj_add_event_cb(undo_,undoSectorHit,LV_EVENT_HIT_TEST,this);
   auto* undoText=lv_obj_get_child(undo_,0);lv_obj_set_align(undoText,LV_ALIGN_TOP_LEFT);lv_obj_set_pos(undoText,85,302);lv_obj_set_size(undoText,156,18);
+  lv_obj_set_style_text_opa(undoText,0,0);
 
  }else {
   if(networkFace()||!usesCommanderDamage(game_.state().format)) {
@@ -275,10 +288,16 @@ void AppUI::counterRockers() {
  }
 }
 void AppUI::curvedUndoText(const std::string& value) {
+ if(freezeUndoCaption_)return;
  if(value==undoCurvedText_)return;undoCurvedText_=value;
+ ScopedWork timing(hardware_.profiler(),Work::UndoLabel);
  // Keep the complete label for semantic lookup; render its letters on the arc.
- auto* semantic=lv_obj_get_child(undo_,0);text(semantic,value);lv_obj_set_style_text_opa(semantic,0,0);
- while(lv_obj_get_child_count(undo_)>1)lv_obj_delete(lv_obj_get_child(undo_,1));
+ auto* semantic=lv_obj_get_child(undo_,0);
+ // Opacity zero still invalidates its entire 156px text box. Lay out this
+ // lookup label once, then hide it so only the visible, changed glyphs redraw.
+ if(!lv_obj_has_flag(semantic,LV_OBJ_FLAG_HIDDEN)){lv_obj_update_layout(undo_);lv_obj_add_flag(semantic,LV_OBJ_FLAG_HIDDEN);}
+ text(semantic,value);
+ unsigned child=1;
  const auto* font=&lv_font_montserrat_14;
  double width=lv_text_get_width(value.c_str(),static_cast<uint32_t>(value.size()),font,0),offset=-width/2;
  constexpr double radius=148,pi=3.141592653589793;
@@ -286,13 +305,43 @@ void AppUI::curvedUndoText(const std::string& value) {
   std::string glyph(1,character);int advance=lv_text_get_width(glyph.c_str(),1,font,0);
   double angle=pi/2-(offset+advance/2.0)/radius;
   if(character!=' '){
-   auto* letter=label(undo_,glyph,0,0,0,font,ink);lv_obj_set_size(letter,advance+2,font->line_height);
+   auto* letter=child<lv_obj_get_child_count(undo_)?lv_obj_get_child(undo_,child):label(undo_,glyph,0,0,0,font,ink);
+   ++child;if(lv_obj_has_flag(letter,LV_OBJ_FLAG_HIDDEN))lv_obj_remove_flag(letter,LV_OBJ_FLAG_HIDDEN);text(letter,glyph);lv_obj_set_size(letter,advance+2,font->line_height);
+   auto opacity=value=="Undo"?LV_OPA_40:LV_OPA_COVER;
+   if(lv_obj_get_style_text_opa(letter,0)!=opacity)lv_obj_set_style_text_opa(letter,opacity,0);
    lv_obj_set_pos(letter,static_cast<int>(std::round(163+radius*std::cos(angle)-(advance+2)/2.0)),static_cast<int>(std::round(163+radius*std::sin(angle)-font->line_height/2.0)));
-   lv_obj_set_style_transform_pivot_x(letter,(advance+2)/2,0);lv_obj_set_style_transform_pivot_y(letter,font->line_height/2,0);
-   int rotation=static_cast<int>(std::round((angle*180/pi-90)*10));lv_obj_set_style_transform_rotation(letter,(rotation+3600)%3600,0);lv_obj_remove_flag(letter,LV_OBJ_FLAG_CLICKABLE);
+   if(lv_obj_get_style_transform_pivot_x(letter,0)!=(advance+2)/2)lv_obj_set_style_transform_pivot_x(letter,(advance+2)/2,0);
+   if(lv_obj_get_style_transform_pivot_y(letter,0)!=font->line_height/2)lv_obj_set_style_transform_pivot_y(letter,font->line_height/2,0);
+   int rotation=(static_cast<int>(std::round((angle*180/pi-90)*10))+3600)%3600;
+   if(lv_obj_get_style_transform_rotation(letter,0)!=rotation)lv_obj_set_style_transform_rotation(letter,rotation,0);lv_obj_remove_flag(letter,LV_OBJ_FLAG_CLICKABLE);
   }
   offset+=advance;
  }
+ while(child<lv_obj_get_child_count(undo_)){auto* letter=lv_obj_get_child(undo_,child++);if(!lv_obj_has_flag(letter,LV_OBJ_FLAG_HIDDEN))lv_obj_add_flag(letter,LV_OBJ_FLAG_HIDDEN);}
+}
+std::vector<AppUI::RenderTrial> AppUI::benchmarkUndoDrawing(){
+ if(view_!=View::Home||selectedPlayer_!=1||transitionActive_||!hardware_.powered()||
+    (multiplayer_&&multiplayer_->attached())||(hardware_.profiler()&&hardware_.profiler()->recording()))return {};
+ // Never serialize or write a benchmark match. Preserve history, recent Undo,
+ // counters and model revision along with life, then rebuild the original face.
+ auto savedGame=game_;
+ std::vector<RenderTrial> trials;trials.reserve(72);
+ for(unsigned phase=0;phase<3;++phase){
+  freezeUndoCaption_=false;game_.startNewGame(4,GameFormat::Commander);
+  transitionPending_=false;build();refresh();lv_obj_update_layout(screen_);
+  auto* display=lv_obj_get_display(screen_);lv_refr_now(display);
+  for(unsigned step=0;step<28;++step){
+   if(step==4)freezeUndoCaption_=phase==1;
+   auto start=std::chrono::steady_clock::now();
+   game_.setActionTime(lv_tick_get());game_.adjustLife(1);refreshDial();
+   lv_obj_update_layout(screen_);lv_refr_now(display);
+   auto micros=std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count();
+   if(step>=4)trials.push_back({phase,static_cast<std::uint64_t>(micros)});
+  }
+ }
+ freezeUndoCaption_=false;game_=std::move(savedGame);
+ transitionPending_=false;build();refresh();lv_obj_update_layout(screen_);lv_refr_now(lv_obj_get_display(screen_));
+ return trials;
 }
 void AppUI::undoSectorHit(lv_event_t* event) {
  auto* self=static_cast<AppUI*>(lv_event_get_user_data(event));auto* hit=static_cast<lv_hit_test_info_t*>(lv_event_get_param(event));lv_area_t area;lv_obj_get_coords(self->screen_,&area);
@@ -332,11 +381,12 @@ void AppUI::refreshTabs() {
 void AppUI::refreshBattery() {
  if(!battery_)return;
  auto reading=hardware_.battery();unsigned percent=std::min(reading.percent,100u);
- int state=!reading.available?-1:reading.charging?6:percent<=5?0:percent<=20?1:percent<=40?2:percent<=60?3:percent<=80?4:5;
+ int state=reading.externalPower?7:!reading.available?-1:reading.charging?6:percent<=5?0:percent<=20?1:percent<=40?2:percent<=60?3:percent<=80?4:5;
  if(state==batteryState_)return;batteryState_=state;lv_obj_clean(battery_);
  auto part=[&](int x,int y,int w,int h,unsigned color){auto* obj=box(battery_,x,y,w,h,color);lv_obj_set_style_radius(obj,0,0);lv_obj_remove_flag(obj,LV_OBJ_FLAG_CLICKABLE);return obj;};
  auto* body=part(0,1,24,12,background);lv_obj_set_style_radius(body,2,0);lv_obj_set_style_border_width(body,1,0);lv_obj_set_style_border_color(body,lv_color_hex(ink),0);
  part(24,5,2,4,ink);
+ if(state==7){label(battery_,LV_SYMBOL_USB,4,0,20,&lv_font_montserrat_14,ink);return;}
  const unsigned colors[]={0xd52942,0xd52942,0xf15b29,0xf6b541,0x4db748,0x00854c,0x00854c};
  if(state>=1&&state<=5)for(int i=0;i<state;++i)part(2+4*i,3,3,8,colors[state]);
  if(state==0||state==6){
@@ -356,7 +406,7 @@ void AppUI::refreshDial() {
   int width=longest<=1?68:longest<=3?76:longest<=6?88:92;
   int leftX=longest<=1?94:longest<=3?90:longest<=6?76:70;
   int rightX=longest<=1?198:longest<=3?194:longest<=6?196:198;
-  for(auto* part:{value_,lifeRight_}){lv_obj_set_style_text_font(part,font,0);lv_obj_set_height(part,font->line_height);lv_obj_set_width(part,width);lv_obj_set_y(part,190-font->line_height/2);}
+  for(auto* part:{value_,lifeRight_}){textFont(part,font);lv_obj_set_height(part,font->line_height);lv_obj_set_width(part,width);lv_obj_set_y(part,190-font->line_height/2);}
   lv_obj_set_x(value_,leftX);lv_obj_set_x(lifeRight_,rightX);text(value_,left);text(lifeRight_,right);
   bool noLife=game_.player().life<=0,poison=game_.poisonWarning(),commander=game_.commanderWarning();
   bool lethal=noLife||poison||commander;std::string info;
@@ -364,17 +414,18 @@ void AppUI::refreshDial() {
   if(poison)info=info.empty()?"POISON LIMIT\nREACHED":"LIFE / POISON";
   if(commander)info=info.empty()?"21 COMMANDER\nDAMAGE":noLife&&poison?"LIFE / POISON\n/ CMD":noLife?"LIFE /\nCOMMANDER":"POISON /\nCOMMANDER";
   if(!lethal&&game_.player().monarch)info="MONARCH";
-  if(!storageError_.empty()&&!lethal)info="SAVE FAILED";
   if(!lethal&&networkFace()&&!multiplayer_->error().empty())info=multiplayer_->error();
-  text(lifeMarker_,lethal?"\xef\x95\x8c":"\xef\x80\x84");lv_obj_set_style_text_color(lifeMarker_,lethal?lv_color_white():lv_color_hex(0xff2449),0);
-  text(status_,info);lv_obj_set_style_text_color(status_,lethal?lv_color_white():lv_color_hex(teal),0);
+  text(lifeMarker_,lethal?"\xef\x95\x8c":"\xef\x80\x84");textColor(lifeMarker_,lethal?lv_color_white():lv_color_hex(0xff2449));
+  text(status_,info);textColor(status_,lethal?lv_color_white():lv_color_hex(teal));
   auto undoLabel=game_.recentUndoLabel(lv_tick_get());curvedUndoText(undoLabel.empty()?"Undo":undoLabel);
   if(undoLabel.empty())lv_obj_add_state(undo_,LV_STATE_DISABLED);else lv_obj_remove_state(undo_,LV_STATE_DISABLED);
-  if(undoArc_)lv_obj_set_style_arc_color(undoArc_,lv_color_hex(undoLabel.empty()?0x303c43:0x17586a),LV_PART_MAIN);
+  if(undoArc_){auto color=lv_color_hex(undoLabel.empty()?0x303c43:0x17586a);if(!lv_color_eq(lv_obj_get_style_arc_color(undoArc_,LV_PART_MAIN),color))lv_obj_set_style_arc_color(undoArc_,color,LV_PART_MAIN);}
   for(unsigned side=0;side<2;++side) {
    auto* count=side?poison_:aux_;auto value=std::to_string(game_.player().counters[static_cast<unsigned>(game_.state().shortcuts[side])]);
-   text(count,value);int width=std::clamp(static_cast<int>(value.size())*9+8,22,44);
-   auto* badge=lv_obj_get_parent(count);lv_obj_set_width(badge,width);lv_obj_set_x(badge,(side?345:56)-width);lv_obj_set_width(count,width-4);lv_obj_center(count);
+   if(value!=lv_label_get_text(count)){
+    text(count,value);int width=std::clamp(static_cast<int>(value.size())*9+8,22,44);
+    auto* badge=lv_obj_get_parent(count);lv_obj_set_width(badge,width);lv_obj_set_x(badge,(side?345:56)-width);lv_obj_set_width(count,width-4);lv_obj_center(count);
+   }
   }
  }else {
   if(networkFace()){auto others=multiplayer_->opponents();if(selectedPlayer_-2<others.size())number(value_,std::to_string(others[selectedPlayer_-2].life));return;}

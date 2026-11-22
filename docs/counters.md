@@ -12,7 +12,7 @@ Rules checked against the [official Comprehensive Rules](https://magic.wizards.c
 - **City's blessing:** a local marker that normally persists for the game; toggling it off is available as a manual correction.
 - **Day/night:** a single local representation of the shared table state (neither/day/night), changed manually. No automatic turn-based transformations are inferred.
 
-Threshold warnings remain informational because cards can alter normal winning/losing conditions. All trackers, source names, visibility and settings are included in the saved session.
+Threshold warnings remain informational because cards can alter normal winning/losing conditions. All trackers, source names, visibility and settings remain in memory for the current session; match saving has been removed.
 
 ## Shortcut trackers
 

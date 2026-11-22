@@ -50,7 +50,7 @@ void AppUI::buildTools() {
   bool ending=view_==View::EndConfirm;
   auto* top=radialSector("",0,3,NoAction,0,0x773044,ending?ToolIcon::End:ToolIcon::Reset);lv_obj_clean(top);
   label(screen_,ending?"END GAME?":"NEW GAME?",95,57,170,&lv_font_montserrat_20,ink);
-  label(screen_,ending?"Disable Continue?":"Reset all stats?",95,99,170,&lv_font_montserrat_14,ink);
+  label(screen_,ending?"Finish this match?":"Reset all stats?",95,99,170,&lv_font_montserrat_14,ink);
   radialSector(ending?"End game":"Yes",1,3,ending?FinishGame:ResetYes,0,red,ToolIcon::Confirm);
   radialSector("No",2,3,ending?CancelEnd:ResetNo,0,teal,ToolIcon::Cancel);
  }else if(view_==View::CoinResult) {

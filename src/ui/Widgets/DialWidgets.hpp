@@ -14,6 +14,12 @@ inline lv_obj_t* label(lv_obj_t* parent,const std::string& value,int x,int y,int
 inline void text(lv_obj_t* obj,const std::string& value) {
  if(value!=lv_label_get_text(obj)) lv_label_set_text(obj,value.c_str());
 }
+inline void textFont(lv_obj_t* obj,const lv_font_t* font) {
+ if(lv_obj_get_style_text_font(obj,0)!=font)lv_obj_set_style_text_font(obj,font,0);
+}
+inline void textColor(lv_obj_t* obj,lv_color_t color) {
+ if(!lv_color_eq(lv_obj_get_style_text_color(obj,0),color))lv_obj_set_style_text_color(obj,color,0);
+}
 inline lv_obj_t* box(lv_obj_t* parent,int x,int y,int w,int h,unsigned color=panel) {
  auto* obj=lv_obj_create(parent);lv_obj_set_pos(obj,x,y);lv_obj_set_size(obj,w,h);
  lv_obj_set_style_pad_all(obj,0,0);lv_obj_set_style_border_width(obj,0,0);
@@ -22,6 +28,6 @@ inline lv_obj_t* box(lv_obj_t* parent,int x,int y,int w,int h,unsigned color=pan
 }
 inline void number(lv_obj_t* obj,const std::string& value) {
  text(obj,value);const auto* font=value.size()>10?&lv_font_montserrat_20:&lv_font_montserrat_48;
- lv_obj_set_style_text_font(obj,font,0);lv_obj_set_height(obj,font->line_height);
+ textFont(obj,font);lv_obj_set_height(obj,font->line_height);
 }
 }

@@ -1,5 +1,6 @@
 #include "core/GameState.hpp"
 #include "core/RandomTools.hpp"
+#include "platform/IProfiler.hpp"
 #include "SimulatorHardware.hpp"
 #include <cstdlib>
 #include <iostream>
@@ -14,6 +15,14 @@ public:
  }
 };
 int main() {
+ struct Probe final:mtg::IProfiler {
+  bool enabled=true;unsigned history=0,undo=0;
+  bool recording()const override{return enabled;}
+  void record(mtg::Work work,std::uint64_t)override{if(work==mtg::Work::HistoryRecord)++history;else if(work==mtg::Work::UndoApply)++undo;}
+ } probe;
+ mtg::GameState timed;timed.setProfiler(&probe);timed.startNewGame(4);timed.setActionTime(100);timed.adjustLife(-2);timed.undoRecent(101);timed.redo();
+ check(probe.history==1&&probe.undo==2&&timed.player().life==38,"timing probes preserve grouped Undo and Redo semantics");
+ probe.enabled=false;timed.adjustLife(1);check(probe.history==1&&timed.player().life==39,"inactive probes leave game edits working without samples");
  mtg::SimulatorHardware hardware;
  for(int i=0;i<100000;++i) hardware.rotate(1);
  check(hardware.takeRotation()==100000 && hardware.takeRotation()==0, "rotation queue loss or duplication");

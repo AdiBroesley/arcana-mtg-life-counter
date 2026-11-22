@@ -1,0 +1,12 @@
+menu "ARCANA hardware"
+config ARCANA_WIFI_SSID
+ string "Wi-Fi SSID (empty disables multiplayer networking)"
+ default ""
+config ARCANA_WIFI_PASSWORD
+ string "Wi-Fi password"
+ default ""
+config ARCANA_ROTATE_180
+ bool "Rotate display and touch by 180 degrees"
+ default n
+endmenu
+

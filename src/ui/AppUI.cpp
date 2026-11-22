@@ -14,7 +14,7 @@ unsigned counterColor(Counter c) {
 }
 std::string signedNumber(std::int64_t n){return std::to_string(n);}
 }
-AppUI::AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile,Multiplayer* multiplayer):profile_(profile?profile:&fallbackProfile_),multiplayer_(multiplayer),game_(game),hardware_(hardware),random_(random),screen_(screen) {build();refresh();}
+AppUI::AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile,Multiplayer* multiplayer,IFirmwareUpdate* updates):updates_(updates),profile_(profile?profile:&fallbackProfile_),multiplayer_(multiplayer),game_(game),hardware_(hardware),random_(random),screen_(screen) {build();refresh();}
 void AppUI::clicked(lv_event_t* event) {
  auto* binding=static_cast<Binding*>(lv_event_get_user_data(event));
  if(binding->ui->hardware_.powered()) binding->ui->handle(binding->action,binding->arg);
@@ -33,7 +33,7 @@ lv_obj_t* AppUI::button(lv_obj_t* parent,const std::string& value,int x,int y,in
   lv_obj_set_style_bg_color(b,lv_color_hex(value=="-"?0x28131f:0x092b2a),0);
   lv_obj_set_style_text_color(l,lv_color_hex(accent),0);lv_obj_set_style_text_font(l,&lv_font_montserrat_32,0);lv_obj_set_height(l,38);lv_obj_center(l);
  }
- if(value=="Close" || value=="Confirm" || value=="Continue" || value=="New game") {
+ if(value=="Close" || value=="Confirm" || value=="New Game") {
   lv_obj_set_style_border_color(b,lv_color_hex(violet),0);lv_obj_set_style_border_width(b,2,0);
  }
  bindings_.push_back({this,action,arg});lv_obj_add_event_cb(b,clicked,LV_EVENT_CLICKED,&bindings_.back());return b;
@@ -74,7 +74,6 @@ void AppUI::beginArcanaSelection(View returnTo){arcanaReturn_=returnTo;hostPendi
 void AppUI::beginFormatSelection(View returnTo) {formatReturn_=returnTo;draftFormat_=game_.state().format;draftPlayers_=draftFormat_==GameFormat::Commander||draftFormat_==GameFormat::TwoHeadedGiant?4:2;navigate(View::FormatSelect);}
 void AppUI::requestNewGame() {if(game_.state().active){formatReturn_=View::Home;navigate(View::ResetConfirm);}else beginArcanaSelection(View::Startup);}
 void AppUI::goHome() {selectedPlayer_=1;navigate(game_.state().active?View::Home:View::Startup);}
-void AppUI::setStorageError(const std::string& error) {if(error!=storageError_){storageError_=error;if(view_==View::Startup)rebuild_=true;}}
 void AppUI::selectPlayer(unsigned player) {
  if(player<1 || player>(networkFace()?multiplayer_->opponents().size()+1:game_.state().playerCount))return;
  selectedPlayer_=player;
@@ -82,10 +81,18 @@ void AppUI::selectPlayer(unsigned player) {
  navigate(View::Home);
 }
 void AppUI::handle(Action action,std::uint32_t arg) {
+ refreshDirty_=true;
  game_.setActionTime(lv_tick_get());
- if(!game_.state().active&&view_!=View::Startup&&view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby&&view_!=View::PlayerSetup&&view_!=View::FormatSelect)return;
+ if(!game_.state().active&&view_!=View::ContactCode&&view_!=View::About&&view_!=View::Updates&&view_!=View::WifiSetup&&view_!=View::Startup&&view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby&&view_!=View::PlayerSetup&&view_!=View::FormatSelect)return;
 
+ if(updateStatus_.phase==UpdatePhase::Installing||updateStatus_.phase==UpdatePhase::Ready)return;
  switch(action) {
+  case ContactLink:contactLink_=arg;navigate(View::ContactCode);break;
+  case OpenAbout:navigate(View::About);break;
+  case OpenUpdates:informationReturn_=view_;navigate(View::Updates);break;
+  case CheckUpdate:if(updates_)updates_->check();break;
+  case InstallUpdate:if(updates_)updates_->install();break;
+  case SetupWifi:if(updates_){updates_->setup();navigate(View::WifiSetup);}break;
   case SingleArcana:hostPending_=false;beginFormatSelection(View::ArcanaMode);break;
   case MultiArcana:nameDraft_=profile_->name();nameSymbols_=false;navigate(View::NameSetup);break;
   case NameKey:if(nameDraft_.size()<12)nameDraft_+=static_cast<char>(arg);break;
@@ -109,16 +116,15 @@ void AppUI::handle(Action action,std::uint32_t arg) {
   case ChooseShortcut:game_.setShortcut(pickerSide_,static_cast<Counter>(arg));goHome();break;
   case RecentUndo:game_.undoRecent(lv_tick_get());break;
   case OpenBrightness:navigate(View::Brightness);break;
-  case ToolBack:if(view_==View::ArcanaMode){navigate(arcanaReturn_);break;}if(view_==View::NameSetup){navigate(View::ArcanaMode);break;}if(view_==View::HostJoin){nameDraft_=profile_->name();navigate(View::NameSetup);break;}if(view_==View::BrowseGames){navigate(View::HostJoin);break;}if(view_==View::NetworkLobby){if(multiplayer_)multiplayer_->leave();game_.endGame();navigate(View::HostJoin);break;}if(view_==View::FormatSelect){navigate(formatReturn_);break;}if(view_==View::PlayerSetup){navigate(View::FormatSelect);break;}if(view_==View::Gear||view_==View::CounterPicker)goHome();else if(view_==View::EndConfirm)navigate(endReturn_);else navigate(View::Gear);break;
+  case ToolBack:if(view_==View::ContactCode){navigate(View::About);break;}if(view_==View::About){navigate(View::Startup);break;}if(view_==View::Updates||view_==View::WifiSetup){if(updates_)updates_->cancel();navigate(view_==View::WifiSetup?View::Updates:informationReturn_);break;}if(view_==View::ArcanaMode){navigate(arcanaReturn_);break;}if(view_==View::NameSetup){navigate(View::ArcanaMode);break;}if(view_==View::HostJoin){nameDraft_=profile_->name();navigate(View::NameSetup);break;}if(view_==View::BrowseGames){if(multiplayer_)multiplayer_->leave();navigate(View::HostJoin);break;}if(view_==View::NetworkLobby){if(multiplayer_)multiplayer_->leave();game_.endGame();navigate(View::HostJoin);break;}if(view_==View::FormatSelect){navigate(formatReturn_);break;}if(view_==View::PlayerSetup){navigate(View::FormatSelect);break;}if(view_==View::Gear||view_==View::CounterPicker)goHome();else if(view_==View::EndConfirm)navigate(endReturn_);else navigate(View::Gear);break;
   case OpenGear:navigate(View::Gear);break;
   case AskReset:formatReturn_=View::Gear;navigate(View::ResetConfirm);break;
   case ResetYes:beginArcanaSelection(formatReturn_);break;
   case ResetNo:navigate(View::Gear);break;
   case FlipCoin:coinHeads_=flipCoin(random_);navigate(View::CoinResult);break;
   case RollD20:starterRoll_=rollStarter(game_.state().format==GameFormat::TwoHeadedGiant?game_.state().playerCount/2:game_.state().playerCount,random_);navigate(View::RollResult);break;
-  case NewGame:beginArcanaSelection(View::Startup);break;
+  case NewGame:if(updates_)updates_->cancel();beginArcanaSelection(View::Startup);break;
   case ChooseFormat:if(arg<static_cast<unsigned>(GameFormat::Count)){draftFormat_=static_cast<GameFormat>(arg);draftPlayers_=draftFormat_==GameFormat::Commander||draftFormat_==GameFormat::TwoHeadedGiant?4:2;navigate(View::PlayerSetup);}break;
-  case ContinueGame:if(game_.state().active)selectPlayer(1);break;
   case ConfirmPlayers:if(hostPending_){if(multiplayer_&&multiplayer_->host(draftFormat_,draftPlayers_)){hostPending_=false;navigate(View::NetworkLobby);}else notice_=multiplayer_?multiplayer_->error():"Network unavailable";}else {if(multiplayer_&&multiplayer_->attached())multiplayer_->leave();if(game_.startNewGame(draftPlayers_,draftFormat_)){subtractLife_=true;selectPlayer(1);}}break;
   case SelectPlayer:selectPlayer(arg);break;
   case CloseDial:if(view_==View::CoinResult||view_==View::RollResult)navigate(View::Gear);else selectPlayer(1);break;
@@ -188,10 +194,11 @@ void AppUI::handle(Action action,std::uint32_t arg) {
  }
 }
 void AppUI::adjust(std::int64_t delta) {
+ refreshDirty_=true;
  bool ok=true;
  switch(view_) {
   case View::Brightness:hardware_.setBrightness(static_cast<unsigned>(std::clamp<std::int64_t>(hardware_.brightness()+std::clamp<std::int64_t>(delta,-100,100),0,100)));break;
-  case View::Startup:case View::ArcanaMode:case View::NameSetup:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:case View::FormatSelect:case View::EndConfirm:break;
+  case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:case View::Startup:case View::ArcanaMode:case View::NameSetup:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:case View::FormatSelect:case View::EndConfirm:break;
   case View::PlayerSetup:if(draftFormat_==GameFormat::TwoHeadedGiant)draftPlayers_=2*static_cast<unsigned>(std::clamp<std::int64_t>(draftPlayers_/2+std::clamp<std::int64_t>(delta,-6,6),2,6));else if(draftFormat_==GameFormat::Commander||draftFormat_==GameFormat::Classic)draftPlayers_=static_cast<unsigned>(std::clamp<std::int64_t>(draftPlayers_+std::clamp<std::int64_t>(delta,-6,6),2,6));break;
   case View::Home:
    if(selectedPlayer_==1)ok=game_.adjustLife(delta);
@@ -219,16 +226,23 @@ void AppUI::adjust(std::int64_t delta) {
 void AppUI::build() {
  transitionActive_=false;
  lv_obj_clean(screen_);bindings_.clear();tabEdgePoints_.clear();
+ fadeCover_=nullptr;
+ updateButton_=newGameButton_=nullptr;
  undoCurvedText_.clear();undoArc_=nullptr;battery_=nullptr;brightnessSlider_=nullptr;batteryState_=-2;
  recipientLabel_=nullptr;lifeMarker_=lifeRight_=value_=detail_=hint_=aux_=status_=poison_=damage_=scroll_=apply_=mode_=undo_=redo_=nullptr;
  tabValues_.fill(nullptr);
  lv_obj_set_style_bg_color(screen_,lv_color_hex(background),0);lv_obj_set_style_bg_opa(screen_,255,0);
- lv_obj_set_style_radius(screen_,LV_RADIUS_CIRCLE,0);lv_obj_set_style_clip_corner(screen_,true,0);
+ lv_obj_set_style_radius(screen_,LV_RADIUS_CIRCLE,0);
+ // Main-face artwork already fits inside its outer 348px ring. A second
+ // whole-screen rounded mask adds ARGB layers to every number/Undo refresh.
+ // Keep the mask on menus that have content extending beyond the round face.
+ lv_obj_set_style_clip_corner(screen_,view_!=View::Home||selectedPlayer_!=1,0);
  lv_obj_set_style_border_width(screen_,0,0);lv_obj_set_style_pad_all(screen_,0,0);
  lv_obj_remove_flag(screen_,LV_OBJ_FLAG_SCROLLABLE);
- dialFrame();contentFirst_=lv_obj_get_child_count(screen_);
+ dialFrame();
  const auto& state=game_.state();const auto& p=game_.player();
  switch(view_) {
+  case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:buildInformation();break;
   case View::ArcanaMode:case View::NameSetup:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:buildMultiplayer();break;
   case View::Startup:case View::FormatSelect:case View::PlayerSetup:buildLifecycle();break;
   case View::EndConfirm:case View::Brightness:case View::Gear:case View::ResetConfirm:case View::CoinResult:case View::RollResult:buildTools();break;
@@ -244,7 +258,7 @@ void AppUI::build() {
    row(rows,n++,"DECK TRACKERS","Choose optional counters",OpenProfiles);
    row(rows,n++,"TABLE STATUS","Monarch / initiative / day",OpenStatus,0,gold);
    row(rows,n++,"HISTORY",std::to_string(game_.historyCursor())+" actions / undo & redo",OpenHistory);
-   row(rows,n++,"END GAME","Finish match / disable Continue",RequestEnd,0,red);
+   row(rows,n++,"END GAME","Finish the current match",RequestEnd,0,red);
    historyButtons();break;
   }
   case View::Counter: {
@@ -334,6 +348,7 @@ void AppUI::refresh() {
  if(redo_) {if(game_.canRedo())lv_obj_remove_state(redo_,LV_STATE_DISABLED);else lv_obj_add_state(redo_,LV_STATE_DISABLED);}
  const auto& p=game_.player();const auto& state=game_.state();
  switch(view_) {
+  case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:refreshInformation();break;
   case View::ArcanaMode:case View::NameSetup:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:refreshMultiplayer();break;
   case View::Startup:case View::FormatSelect:case View::PlayerSetup:case View::EndConfirm:refreshLifecycle();break;
   case View::Home:refreshDial();break;
@@ -366,7 +381,16 @@ void AppUI::refresh() {
  }
 }
 void AppUI::setContentOpacity(lv_opa_t opacity) {
- for(unsigned i=contentFirst_;i<lv_obj_get_child_count(screen_);++i)lv_obj_set_style_opa(lv_obj_get_child(screen_,i),opacity,0);
+ if(opacity==LV_OPA_COVER){if(fadeCover_){lv_obj_delete(fadeCover_);fadeCover_=nullptr;}return;}
+ if(!fadeCover_){
+  // A single background-opacity cover blends directly, avoiding one temporary
+  // ARGB layer per widget. Keep both permanent frame rings outside the cover.
+  int inset=view_==View::Home&&selectedPlayer_==1?8:12;
+  fadeCover_=box(screen_,inset,inset,360-2*inset,360-2*inset,background);
+  lv_obj_set_style_radius(fadeCover_,LV_RADIUS_CIRCLE,0);
+  lv_obj_remove_flag(fadeCover_,LV_OBJ_FLAG_CLICKABLE);
+ }
+ lv_obj_set_style_bg_opa(fadeCover_,255-opacity,0);
 }
 void AppUI::advanceTransition() {
  if(!transitionActive_)return;
@@ -377,24 +401,33 @@ void AppUI::advanceTransition() {
  unsigned remaining=180-elapsed;setContentOpacity(static_cast<lv_opa_t>(255-255*remaining*remaining/(180*180)));
 }
 void AppUI::update() {
+ lastUpdateWork_=false;
+ if(updates_){auto status=updates_->status();if(status.revision!=updateRevision_){updateRevision_=status.revision;updateStatus_=std::move(status);if(view_==View::WifiSetup&&(updateStatus_.phase==UpdatePhase::Available||updateStatus_.phase==UpdatePhase::Current||updateStatus_.phase==UpdatePhase::Error))navigate(View::Updates);if(view_==View::Startup||view_==View::About||view_==View::Updates||view_==View::WifiSetup)refreshDirty_=true;}}
  if(multiplayer_){
+  if(networkRevision_!=multiplayer_->revision()){networkRevision_=multiplayer_->revision();refreshDirty_=true;}
   multiplayer_->tick(lv_tick_get());std::string signature=multiplayer_->error()+std::to_string(multiplayer_->connected())+std::to_string(multiplayer_->started());
   for(const auto& p:multiplayer_->players())signature+=p.id+p.name+std::to_string(p.online);
   for(const auto& l:multiplayer_->lobbies())signature+=l.id+l.name+std::to_string(l.joined)+std::to_string(l.started);
-  if(signature!=networkSignature_){networkSignature_=signature;if(view_==View::BrowseGames||view_==View::NetworkLobby||(view_==View::Home&&networkFace()))rebuild_=true;lifeHoldActive_=false;lifeHoldCancelled_=true;}
+  if(signature!=networkSignature_){refreshDirty_=true;networkSignature_=signature;if(view_==View::BrowseGames||view_==View::NetworkLobby||(view_==View::Home&&networkFace()))rebuild_=true;lifeHoldActive_=false;lifeHoldCancelled_=true;}
   if(view_==View::NetworkLobby&&multiplayer_->connected()&&multiplayer_->started())goHome();
  }
 
  if(lifeHoldActive_){if(!hardware_.powered()){lifeHoldActive_=false;lifeHoldCancelled_=true;}else if(hardware_.touch().pressed)repeatLifeHold(lv_tick_get());}
- if(view_!=View::Startup && view_!=View::PlayerSetup && view_!=View::FormatSelect && view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby && !game_.state().active)navigate(View::Startup);
+ if(view_!=View::ContactCode&&view_!=View::About&&view_!=View::Updates&&view_!=View::WifiSetup&&view_!=View::Startup && view_!=View::PlayerSetup && view_!=View::FormatSelect && view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby && !game_.state().active)navigate(View::Startup);
  game_.setActionTime(lv_tick_get());
- auto delta=hardware_.takeRotation();if(delta && hardware_.powered())adjust(delta);
+ auto delta=hardware_.takeRotation();if(delta){auto before=game_.revision();if(hardware_.powered())adjust(delta);hardware_.rotationApplied(game_.revision()!=before);}
  if((view_==View::Damage && !game_.source(sourceId_)) || (view_==View::Casts && ownIndex_>=game_.state().commanders.size()))navigate(View::Menu);
  if(game_.revision()!=revision_) {
+  refreshDirty_=true;
   if(view_==View::Startup)rebuild_=true;
   if(view_==View::Menu || view_==View::Profiles || view_==View::Status || view_==View::History || view_==View::Sources || view_==View::Commanders)rebuild_=true;
   revision_=game_.revision();
  }
- if(rebuild_)build();refresh();advanceTransition();
+ if(view_==View::Brightness && value_ && std::to_string(hardware_.brightness())+"%"!=lv_label_get_text(value_))refreshDirty_=true;
+ if(view_==View::Home){refreshBattery();if(selectedPlayer_==1){auto undo=game_.recentUndoLabel(lv_tick_get());if((undo.empty()?"Undo":undo)!=undoCurvedText_)refreshDirty_=true;}}
+ if(rebuild_){build();refreshDirty_=true;lastUpdateWork_=true;}
+ if(refreshDirty_){refresh();refreshDirty_=false;lastUpdateWork_=true;}
+ if(transitionActive_)lastUpdateWork_=true;
+ advanceTransition();
 }
 }

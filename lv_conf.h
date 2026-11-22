@@ -11,4 +11,6 @@
 #define LV_USE_SDL 0
 #define LV_BUILD_EXAMPLES 0
 #define LV_BUILD_DEMOS 0
+#define LV_USE_QRCODE 1
+#define LV_USE_CANVAS 1
 #endif

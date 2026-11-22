@@ -9,3 +9,13 @@ current-game.json*
 
 *-profile.json
 device-profile.json
+
+/firmware/.pio/
+/firmware/managed_components/
+/firmware/sdkconfig
+/firmware/sdkconfig.old
+/firmware/sdkconfig.local
+/firmware/sdkconfig.*
+!/firmware/sdkconfig.defaults
+/backups/
+__pycache__/

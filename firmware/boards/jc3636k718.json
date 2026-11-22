@@ -1,0 +1,24 @@
+{
+  "name": "Guition JC3636K718 (16 MB flash, 8 MB OPI PSRAM)",
+  "vendor": "Guition",
+  "url": "https://www.guition.com/",
+  "frameworks": ["espidf"],
+  "connectivity": ["wifi", "bluetooth"],
+  "build": {
+    "mcu": "esp32s3",
+    "core": "esp32",
+    "variant": "esp32s3",
+    "f_cpu": "240000000L",
+    "f_flash": "80000000L",
+    "flash_mode": "qio",
+    "hwids": [["0x303A", "0x1001"]]
+  },
+  "debug": {"openocd_target": "esp32s3.cfg"},
+  "upload": {
+    "flash_size": "16MB",
+    "maximum_size": 7340032,
+    "maximum_ram_size": 327680,
+    "require_upload_port": true,
+    "speed": 460800
+  }
+}

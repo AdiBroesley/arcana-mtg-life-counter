@@ -1,5 +1,6 @@
 #include "lvgl.h"
 #include "ui/AppUI.hpp"
+#include "core/AppInfo.hpp"
 #include "SimulatorHardware.hpp"
 #include "third_party/json.hpp"
 #include <cstdlib>
@@ -14,6 +15,12 @@ constexpr int size=360;
 mtg::SimulatorHardware hardware;
 mtg::GameState game;
 mtg::AppUI* app;
+class TestUpdate final:public mtg::IFirmwareUpdate {
+public:mtg::UpdateStatus current;unsigned checks=0;
+ mtg::UpdateStatus status()const override{return current;}
+ void check()override{++checks;current.phase=mtg::UpdatePhase::Current;current.message="You have the latest firmware";++current.revision;}
+ void install()override{}void setup()override{}void cancel()override{}
+};
 class TestRandom final:public mtg::IRandom {
 public:
  std::vector<unsigned> values{1,0,4,19,6,2,9,8};std::size_t index=0;
@@ -24,10 +31,14 @@ public:
 class ProfileMemory final:public mtg::IStorage {public:std::string value;bool load(std::string& data,std::string&)override{data=value;return true;}bool save(const std::string& data,std::string&)override{value=data;return true;}};
 class UIWire final:public mtg::IPeerTransport {public:std::vector<mtg::PeerPacket> incoming,sent;std::string empty;bool send(const std::string& endpoint,const std::string& data)override{sent.push_back({endpoint,data});return true;}std::vector<mtg::PeerPacket> receive()override{auto result=std::move(incoming);incoming.clear();return result;}const std::string& error()const override{return empty;}};
 std::vector<uint32_t> pixels(size*size);
+unsigned flushCount=0;
+std::uint64_t flushedPixels=0;
 void check(bool condition,const std::string& message) {
  if(!condition){std::cerr<<"UI: "<<message<<'\n';std::exit(1);}
 }
 void flush(lv_display_t* d,const lv_area_t* a,uint8_t* data) {
+ ++flushCount;
+ flushedPixels+=static_cast<std::uint64_t>(lv_area_get_width(a))*lv_area_get_height(a);
  for(int y=a->y1;y<=a->y2;++y)for(int x=a->x1;x<=a->x2;++x)
   pixels[y*size+x]=reinterpret_cast<uint32_t*>(data)[(y-a->y1)*(a->x2-a->x1+1)+x-a->x1];
  lv_display_flush_ready(d);
@@ -36,6 +47,20 @@ void read(lv_indev_t*,lv_indev_data_t* data) {
  auto t=hardware.touch();data->point.x=t.x;data->point.y=t.y;data->state=t.pressed?LV_INDEV_STATE_PRESSED:LV_INDEV_STATE_RELEASED;
 }
 void tick(int times=4) {for(int i=0;i<times;++i){app->update();lv_tick_inc(20);lv_timer_handler();}}
+void checkFullRedrawMatches(const std::string& description){
+ auto incremental=pixels;lv_obj_invalidate(lv_screen_active());tick();
+ if(pixels==incremental)return;
+ unsigned count=0;int minX=360,minY=360,maxX=0,maxY=0,maxDifference=0;bool centerMatches=true;
+ for(int y=0;y<size;++y)for(int x=0;x<size;++x){auto a=incremental[y*size+x],b=pixels[y*size+x];if(a!=b){++count;minX=std::min(minX,x);minY=std::min(minY,y);maxX=std::max(maxX,x);maxY=std::max(maxY,y);for(int shift:{0,8,16}){auto difference=std::abs(static_cast<int>((a>>shift)&255)-static_cast<int>((b>>shift)&255));maxDifference=std::max(maxDifference,difference);if(x>=80&&x<280&&y>=110&&y<285&&difference>1)centerMatches=false;}}}
+ // LVGL's rotated tab/Undo glyph edges can round differently with a different
+ // clipping rectangle (13 pixels in the reference capture). Keep central life,
+ // battery and warning pixels exact to one level, and bound edge variation.
+ bool matches=centerMatches&&count<=64&&maxDifference<=24;
+ if(!matches){
+  std::cout<<"Pixel differences: "<<count<<" bounds "<<minX<<','<<minY<<" - "<<maxX<<','<<maxY<<" max channel "<<maxDifference<<'\n';
+ }
+ check(matches,description+": partial redraw must match a full redraw without stale pixels");
+}
 lv_obj_t* find(lv_obj_t* parent,const std::string& text) {
  if(lv_obj_check_type(parent,&lv_label_class) && text==lv_label_get_text(parent))return parent;
  for(unsigned i=0;i<lv_obj_get_child_count(parent);++i)if(auto* found=find(lv_obj_get_child(parent,i),text))return found;
@@ -78,16 +103,51 @@ int main() {
  auto* input=lv_indev_create();lv_indev_set_type(input,LV_INDEV_TYPE_POINTER);lv_indev_set_read_cb(input,read);
  lv_obj_set_style_bg_color(lv_screen_active(),lv_color_hex(0),0);
  auto* device=lv_obj_create(lv_screen_active());lv_obj_set_size(device,size,size);lv_obj_set_pos(device,0,0);
- TestRandom random;mtg::AppUI ui(game,hardware,device,random);app=&ui;tick();screenshot("ui-startup.bmp");
- auto* continueLabel=find(lv_screen_active(),"Continue");
- check(continueLabel && lv_obj_has_state(lv_obj_get_parent(continueLabel),LV_STATE_DISABLED),"Continue disabled without unfinished game");
+ TestRandom random;TestUpdate updates;mtg::AppUI ui(game,hardware,device,random,nullptr,nullptr,&updates);app=&ui;tick();screenshot("ui-startup.bmp");
+ check(find(lv_screen_active(),"New Game")&&find(lv_screen_active(),"Update")&&find(lv_screen_active(),"About")&&!find(lv_screen_active(),"Continue"),"startup offers New Game, Update and About");
+ check(lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Update")),LV_STATE_DISABLED),"Update is disabled until a newer release is known");
+ click("About");check(find(lv_screen_active(),"A R C A N A")&&find(lv_screen_active(),std::string("Version ")+mtg::appInfo::version),"About shows product and installed version");check(find(lv_screen_active(),"michaeldengl@hotmail.com")&&find(lv_screen_active(),"MagicTG Kreuzlingen"),"About contains the approved public contact details");
+ screenshot("ui-about.bmp");click("MagicTG Kreuzlingen");screenshot("ui-whatsapp.bmp");click("Back");click("Wi-Fi & Updates");click("Check");check(updates.checks==1,"manual release check reaches the update service");click("Back");check(find(lv_screen_active(),std::string("Version ")+mtg::appInfo::version),"updates Back returns one step to About");click("Back");
+ updates.current.phase=mtg::UpdatePhase::Available;updates.current.latest="0.15.2";updates.current.message="New version ready to install";++updates.current.revision;tick();
+ check(!lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Update")),LV_STATE_DISABLED),"compatible newer release enables Update");
+ click("Update");check(find(lv_screen_active(),"Latest 0.15.2"),"update page shows the available version");screenshot("ui-updates.bmp");click("Back");
+ updates.current.phase=mtg::UpdatePhase::Current;++updates.current.revision;tick();
+ check(lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Update")),LV_STATE_DISABLED),"Update disables when no newer release exists");
  rotate(100);check(!game.state().active && game.player().life==40,"startup rotary cannot edit game");
- click("New game");click("SINGLE ARCANA");screenshot("ui-formats.bmp");click("Commander");check(find(lv_screen_active(),"4-Players"),"four players by default");screenshot("ui-setup.bmp");
+ click("New Game");click("SINGLE ARCANA");screenshot("ui-formats.bmp");click("Commander");check(find(lv_screen_active(),"4-Players"),"four players by default");screenshot("ui-setup.bmp");
  rotate(100);check(find(lv_screen_active(),"6-Players"),"setup clamps at six");
  rotate(-100);check(find(lv_screen_active(),"2-Players"),"setup clamps at two");
  click("Back");check(!game.state().active,"setup Back does not start a game");
  click("Commander");click("Confirm");check(game.state().active && game.state().playerCount==4,"confirmed four-player match");
  check(!find(lv_screen_active(),"P1") && find(lv_screen_active(),"P4") && !find(lv_screen_active(),"P5"),"tabs match selected player count");screenshot("ui-home.bmp");
+ tick(30);auto idleFlushes=flushCount;tick(50);check(flushCount==idleFlushes,"idle life face must not continuously invalidate/redraw");
+ auto* undoSemantic=find(lv_screen_active(),"Undo");auto* undoTarget=lv_obj_get_parent(undoSemantic);
+ check(lv_obj_get_style_opa(undoTarget,0)==255,"disabled Undo touch target must not create a large opacity layer");
+ auto pixelsBeforeFirstWheel=flushedPixels;
+ game.setActionTime(lv_tick_get());game.adjustLife(-1);ui.update();tick(15);undoSemantic=find(lv_screen_active(),"Undo -1");check(undoSemantic,"recent Undo label is updated");
+ std::cout<<"First life edit redraw: "<<flushedPixels-pixelsBeforeFirstWheel<<" pixels\n";
+ check(flushedPixels-pixelsBeforeFirstWheel<size*size/3,"the first wheel edit and Undo activation must not repaint the whole face");
+ undoTarget=lv_obj_get_parent(undoSemantic);auto* firstUndoLetter=lv_obj_get_child(undoTarget,1);auto undoGlyphCount=lv_obj_get_child_count(undoTarget);
+ tick(15);auto pixelsBeforeWheel=flushedPixels;
+ game.adjustLife(-1);ui.update();tick();check(find(lv_screen_active(),"Undo -2")&&lv_obj_get_child(undoTarget,1)==firstUndoLetter&&lv_obj_get_child_count(undoTarget)==undoGlyphCount,"curved Undo letters are reused between edits");
+ auto wheelPixels=flushedPixels-pixelsBeforeWheel;std::cout<<"Steady life edit redraw: "<<wheelPixels<<" pixels\n";
+ check(wheelPixels>0&&wheelPixels<size*size/10,"steady life changes must redraw only the changed number and Undo glyphs");
+ checkFullRedrawMatches("steady wheel edit");
+ auto pixelsBeforeExpiry=flushedPixels;
+ lv_tick_inc(5100);ui.update();tick(15);check(find(lv_screen_active(),"Undo")&&lv_obj_get_child_count(undoTarget)==undoGlyphCount&&lv_obj_has_flag(lv_obj_get_child(undoTarget,-1),LV_OBJ_FLAG_HIDDEN),"expired Undo hides surplus glyphs for reuse");
+ std::cout<<"Undo expiry redraw: "<<flushedPixels-pixelsBeforeExpiry<<" pixels\n";
+ check(flushedPixels-pixelsBeforeExpiry<size*size/3,"Undo expiry must stay within its visible bottom sector");
+ checkFullRedrawMatches("Undo expiry");
+ for(auto life:{9,10,99,100,1000,-1,0,40}){
+  game.adjustLife(life-game.player().life);tick(15);
+  checkFullRedrawMatches("life "+std::to_string(life));
+ }
+ auto benchmarkLife=game.player().life;auto benchmarkHistory=game.history().size();auto benchmarkCursor=game.historyCursor();auto benchmarkRevision=game.revision();auto benchmarkUndo=game.recentUndoLabel(lv_tick_get());
+ auto renderTrials=ui.benchmarkUndoDrawing();
+ check(renderTrials.size()==72,"Undo drawing comparison must use three equal 24-sample phases");
+ check(game.player().life==benchmarkLife&&game.history().size()==benchmarkHistory&&game.historyCursor()==benchmarkCursor&&game.revision()==benchmarkRevision&&game.recentUndoLabel(lv_tick_get())==benchmarkUndo,"drawing comparison must restore the original model, history and recent Undo");
+ checkFullRedrawMatches("restored benchmark face");
+ game.startNewGame(4);ui.goHome();tick(30);
  // Regression: the whole top segment must start at the divider, not merely change color there.
  bool strayStroke=false;
  for(int y=82;y<=86;++y)for(int x=174;x<180;++x){auto pixel=pixels[y*size+x];unsigned r=(pixel>>16)&255,g=(pixel>>8)&255,b=pixel&255;if((r>180&&g<110)||(g>150&&r<70&&b<220))strayStroke=true;}
@@ -147,11 +207,11 @@ int main() {
  ui.goHome();tick();hardware.togglePower();rotate(5);check(game.player().life==37,"power-off rotation ignored");
  hardware.togglePower();rotate(-2);check(game.player().life==35,"power-on rotation works");
  game.reset();ui.goHome();tick();check(game.player().life==40&&game.player().counters[0]==0,"reset refresh");
- ui.showStartup();tick();click("Continue");check(find(lv_screen_active(),"\xef\x80\x84"),"Continue reopens unfinished match");
+ ui.showStartup();tick();check(!find(lv_screen_active(),"Continue"),"startup never offers Continue for an active in-memory match");ui.goHome();tick();
  click(LV_SYMBOL_SETTINGS);click("End Game");click("Back");check(game.state().active&&find(lv_screen_active(),"Brightness"),"cancel End Game returns to gear menu");
  click("End Game");click("End game");check(!game.state().active,"explicitly ended match");
- continueLabel=find(lv_screen_active(),"Continue");check(continueLabel&&lv_obj_has_state(lv_obj_get_parent(continueLabel),LV_STATE_DISABLED),"Continue disabled after End game");screenshot("ui-ended.bmp");
- click("New game");click("SINGLE ARCANA");click("Commander");rotate(2);click("Confirm");screenshot("ui-six-players.bmp");check(game.state().playerCount==6&&find(lv_screen_active(),"P6"),"six-player tabs");screenshot("ui-six-players.bmp");
+ check(find(lv_screen_active(),"New Game")&&!find(lv_screen_active(),"Continue"),"ended game returns to New Game only");screenshot("ui-ended.bmp");
+ click("New Game");click("SINGLE ARCANA");click("Commander");rotate(2);click("Confirm");screenshot("ui-six-players.bmp");check(game.state().playerCount==6&&find(lv_screen_active(),"P6"),"six-player tabs");screenshot("ui-six-players.bmp");
  click(LV_SYMBOL_SETTINGS);click("Brightness");rotate(-1000);check(hardware.brightness()==0&&find(lv_screen_active(),"0%"),"brightness minimum");rotate(1000);check(hardware.brightness()==100&&find(lv_screen_active(),"100%"),"brightness maximum");rotate(-35);check(hardware.brightness()==65,"brightness encoder adjustment");click("+");check(hardware.brightness()==66,"brightness plus button");click("-");check(hardware.brightness()==65,"brightness minus button");clickAt(180,122);check(hardware.brightness()>=49&&hardware.brightness()<=51,"brightness touch slider");hardware.setBrightness(65);tick();screenshot("ui-brightness.bmp");click("Back");check(find(lv_screen_active(),"Flip Coin"),"brightness Back returns one step");click("Back");hardware.setBrightness(100);
  auto beforeTools=game.serialize();click(LV_SYMBOL_SETTINGS);screenshot("ui-tools.bmp");click("Flip Coin");check(find(lv_screen_active(),"HEADS"),"heads result from injected randomness");screenshot("ui-coin.bmp");
  click("Flip again");check(find(lv_screen_active(),"TAILS"),"tails result");click("Back");click("Back");
@@ -222,39 +282,39 @@ int main() {
  hardware.setBattery(75);tick();
  for(auto entry:std::vector<std::pair<const char*,std::int64_t>>{{"Classic",20},{"Brawl",25},{"Limited",20}}){
   game.endGame();ui.showStartup();tick(12);check(find(lv_screen_active(),"LIFE COUNTER")&&!find(lv_screen_active(),"COMMANDER LIFE COUNTER"),"startup title has no Commander prefix");
-  click("New game");click("SINGLE ARCANA");click(entry.first);check(find(lv_screen_active(),"2-Players"),"noncommander preset defaults to two players");click("Confirm");tick(12);
+  click("New Game");click("SINGLE ARCANA");click(entry.first);check(find(lv_screen_active(),"2-Players"),"noncommander preset defaults to two players");click("Confirm");tick(12);
   check(game.player().life==entry.second&&game.life(2)==entry.second&&!game.commanderWarning(),"preset starts both players at correct HP");
   screenshot((std::string("ui-")+entry.first+"-home.bmp").c_str());
   click("P2");check(find(lv_screen_active(),"P2 / LIFE")&&!find(lv_screen_active(),"LIMIT 21"),"noncommander opponent menu edits life");
   rotate(-3);click("+");check(game.life(2)==entry.second-2&&game.player().life==entry.second,"opponent life changes independently");
   screenshot((std::string("ui-")+entry.first+"-opponent.bmp").c_str());click("Back");
-  auto stored=game.serialize();mtg::GameState reloaded;check(reloaded.deserialize(stored)&&reloaded.life(2)==entry.second-2&&reloaded.state().format==game.state().format,"noncommander opponent HP survives recovery");
-  ui.showStartup();tick();click("Continue");click("P2");check(find(lv_screen_active(),std::to_string(entry.second-2)),"Continue restores opponent life menu");click("Back");
+  ui.goHome();tick();click("P2");check(find(lv_screen_active(),std::to_string(entry.second-2)),"opponent life remains in memory when switching menus");click("Back");
   game.reset();tick();check(game.life(2)==entry.second&&game.player().life==entry.second,"reset restores both starting life totals");
  }
- game.endGame();ui.showStartup();tick();click("New game");click("SINGLE ARCANA");click("2HG");check(find(lv_screen_active(),"2 Teams / 4P"),"2HG shows team setup");rotate(100);check(find(lv_screen_active(),"6 Teams / 12P"),"team setup clamps at six teams");rotate(-100);check(find(lv_screen_active(),"2 Teams / 4P"),"team setup clamps at two teams");click("Confirm");tick(12);
+ game.endGame();ui.showStartup();tick();click("New Game");click("SINGLE ARCANA");click("2HG");check(find(lv_screen_active(),"2 Teams / 4P"),"2HG shows team setup");rotate(100);check(find(lv_screen_active(),"6 Teams / 12P"),"team setup clamps at six teams");rotate(-100);check(find(lv_screen_active(),"2 Teams / 4P"),"team setup clamps at two teams");click("Confirm");tick(12);
  check(game.state().playerCount==4&&game.state().poisonLimit==15&&!find(lv_screen_active(),"P2")&&find(lv_screen_active(),"P3")&&find(lv_screen_active(),"P4"),"2HG has fixed teams and enemy-only tabs");
  game.adjustPlayerLife(2,-3);tick();check(game.player().life==37&&game.life(2)==37,"teammates share life");
  click("P3");check(find(lv_screen_active(),"P3 / CMD"),"2HG retains commander damage");rotate(4);check(game.player().life==33&&game.life(2)==33,"2HG linked damage reduces shared life");click("To P1");check(find(lv_screen_active(),"To P2"),"2HG switches the commander damage recipient");rotate(2);check(game.source(1)->damage==4&&game.source(2)->damage==2&&game.life(1)==31&&game.life(2)==31,"2HG damage kept separate by recipient while sharing life");screenshot("ui-2HG-opponent.bmp");click("Back");
  game.adjustCounter(mtg::Counter::Poison,14);check(!game.poisonWarning(),"2HG survives fourteen poison");game.adjustCounter(mtg::Counter::Poison,1);check(game.poisonWarning(),"2HG poison threshold fifteen");
- game.endGame();ui.showStartup();tick();click("New game");click("SINGLE ARCANA");click("2HG");click("+");check(find(lv_screen_active(),"3 Teams / 6P"),"team plus adds two players");rotate(3);check(find(lv_screen_active(),"6 Teams / 12P"),"six-team setup");screenshot("ui-6-teams-setup.bmp");click("Confirm");tick(12);
+ game.endGame();ui.showStartup();tick();click("New Game");click("SINGLE ARCANA");click("2HG");click("+");check(find(lv_screen_active(),"3 Teams / 6P"),"team plus adds two players");rotate(3);check(find(lv_screen_active(),"6 Teams / 12P"),"six-team setup");screenshot("ui-6-teams-setup.bmp");click("Confirm");tick(12);
  check(game.state().playerCount==12&&find(lv_screen_active(),"P12"),"twelve-player game includes last enemy tile");screenshot("ui-6-teams-home.bmp");
  for(unsigned owner=3;owner<=12;++owner){double angle=(210+(owner-3+0.5)*12)*3.141592653589793/180;clickAt(static_cast<int>(std::round(180+160*std::cos(angle))),static_cast<int>(std::round(180+160*std::sin(angle))));check(find(lv_screen_active(),"P"+std::to_string(owner)+" / CMD"),"all ten enemy tiles open their own radial menu");click("Back");}
- game.adjustPlayerLife(12,-5);check(game.life(11)==35&&game.life(12)==35,"sixth team shares independent life");ui.showStartup();tick();click("Continue");check(game.state().playerCount==12&&find(lv_screen_active(),"P12"),"Continue restores six teams");
+ game.adjustPlayerLife(12,-5);check(game.life(11)==35&&game.life(12)==35,"sixth team shares independent life");ui.goHome();tick();check(game.state().playerCount==12&&find(lv_screen_active(),"P12"),"six teams remain available in the active match");
  random.values={1,2,3,4,5,20};random.index=0;click(LV_SYMBOL_SETTINGS);click("Roll");check(find(lv_screen_active(),"T6"),"starter roll supports all six teams");screenshot("ui-6-teams-roll.bmp");click("Back");click("Back");
  game.startNewGame(4);ui.goHome();tick(12);
  ui.openTrackers();ui.update();lv_obj_update_layout(lv_screen_active());auto* transitionTitle=find(lv_screen_active(),"TRACKERS");
- check(transitionTitle&&lv_obj_get_style_opa(transitionTitle,0)==0,"navigation starts a content fade");
+ auto* cover=lv_obj_get_child(device,-1);
+ check(transitionTitle&&lv_obj_get_style_opa(transitionTitle,0)==255&&lv_obj_get_style_bg_opa(cover,0)==255,"navigation starts behind one opaque cover without widget alpha layers");
  check(lv_obj_get_style_opa(lv_obj_get_child(lv_screen_active(),0),0)==255,"outer ring stays opaque during transition");
- tick(4);auto midway=lv_obj_get_style_opa(transitionTitle,0);check(midway>0&&midway<255,"transition fades through intermediate opacity");
- tick(8);check(lv_obj_get_style_opa(transitionTitle,0)==255,"transition finishes fully opaque");
+ tick(4);auto midway=lv_obj_get_style_bg_opa(cover,0);check(midway>0&&midway<255,"cover fades through intermediate opacity");
+ tick(8);check(lv_obj_get_style_opa(transitionTitle,0)==255&&lv_obj_get_child(device,-1)!=cover,"transition finishes and removes its cover");
  game.adjustLife(1);tick();transitionTitle=find(lv_screen_active(),"TRACKERS");check(transitionTitle&&lv_obj_get_style_opa(transitionTitle,0)==255,"stat refresh does not trigger a transition");
  ui.goHome();tick(12);auto* heart=find(lv_screen_active(),"\xef\x80\x84");game.adjustLife(1);tick();check(heart&&lv_obj_get_style_opa(heart,0)==255,"life adjustments remain instant");
  ui.openTrackers();ui.update();ui.goHome();tick(12);heart=find(lv_screen_active(),"\xef\x80\x84");check(heart&&lv_obj_get_style_opa(heart,0)==255,"rapid navigation cancels the previous transition");
  ui.openTrackers();ui.update();hardware.togglePower();ui.update();lv_obj_update_layout(lv_screen_active());transitionTitle=find(lv_screen_active(),"TRACKERS");check(transitionTitle&&lv_obj_get_style_opa(transitionTitle,0)==255,"power off cancels the transition");hardware.togglePower();
  ProfileMemory profileMemory;mtg::DeviceProfile identity(&profileMemory);UIWire wire;mtg::Multiplayer networking(game,identity,wire);
  game.endGame();mtg::AppUI multiUI(game,hardware,device,random,&identity,&networking);app=&multiUI;tick(12);
- click("New game");screenshot("ui-arcana-mode.bmp");click("MULTI ARCANA");
+ click("New Game");screenshot("ui-arcana-mode.bmp");click("MULTI ARCANA");
  for(char character:std::string("ABCDEFGHIJKLMNOPQRSTUVWXYZ")){click(std::string(1,character));auto* entered=labelAt(lv_screen_active(),180,96);check(entered&&std::string(lv_label_get_text(entered))==std::string(1,character),"all curved letter keys are reachable");click("DEL");}
  click("123");for(char character:std::string("0123456789-_")){click(std::string(1,character));auto* entered=labelAt(lv_screen_active(),180,96);check(entered&&std::string(lv_label_get_text(entered))==std::string(1,character),"all curved symbol keys are reachable");click("DEL");}screenshot("ui-name-symbol-keyboard.bmp");click("ABC");
  click("A");click("SP");click("B");check(find(lv_screen_active(),"A B"),"curved space key inserts a space");click("DEL");click("DEL");click("DEL");
