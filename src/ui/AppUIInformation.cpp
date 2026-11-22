@@ -1,5 +1,6 @@
 #include "AppUI.hpp"
 #include "core/AppInfo.hpp"
+#include "core/WifiSetup.hpp"
 #include <cstring>
 #include "Widgets/DialWidgets.hpp"
 namespace mtg {
@@ -32,12 +33,17 @@ void AppUI::buildInformation(){
   lv_label_set_long_mode(detail_,LV_LABEL_LONG_WRAP);lv_obj_set_height(detail_,35);
   button(screen_,"Check",136,318,88,28,CheckUpdate);
  }else{
-  label(screen_,"WI-FI SETUP",70,49,220,&lv_font_montserrat_20,violet);
-  label(screen_,"On your phone, connect to",60,82,240,&lv_font_montserrat_14,muted);
-  value_=label(screen_,"",48,106,264,&lv_font_montserrat_14,ink);
-  detail_=label(screen_,"",60,237,240,&lv_font_montserrat_14,ink);
-  lv_label_set_long_mode(detail_,LV_LABEL_LONG_WRAP);lv_obj_set_height(detail_,38);
-  label(screen_,"Open 192.168.4.1",65,290,230,&lv_font_montserrat_14,violet);
+  label(screen_,"WI-FI SETUP",70,30,220,&lv_font_montserrat_20,violet);
+  label(screen_,"Scan to join Wi-Fi",60,54,240,&lv_font_montserrat_14,muted);
+  auto* quiet=box(screen_,72,76,216,216,0xffffff);lv_obj_set_style_radius(quiet,8,0);
+  setupQr_=lv_qrcode_create(quiet);lv_qrcode_set_size(setupQr_,180);lv_obj_set_pos(setupQr_,18,18);
+  lv_qrcode_set_dark_color(setupQr_,lv_color_black());lv_qrcode_set_light_color(setupQr_,lv_color_white());
+  lv_obj_add_flag(quiet,LV_OBJ_FLAG_HIDDEN);
+  value_=label(screen_,"",60,157,240,&lv_font_montserrat_14,ink);
+  lv_label_set_long_mode(value_,LV_LABEL_LONG_WRAP);lv_obj_set_height(value_,65);
+  detail_=label(screen_,"",50,296,260,&lv_font_montserrat_14,violet);
+  button(screen_,"Back",124,318,112,26,ToolBack,0,0x000000);
+  refreshInformation();return;
  }
  radialBack();refreshInformation();
 }
@@ -46,6 +52,18 @@ void AppUI::refreshInformation(){
   text(value_,updateStatus_.latest.empty()?"Release check":std::string("Latest ")+updateStatus_.latest);
   text(detail_,updateStatus_.phase==UpdatePhase::Installing?"Installing "+std::to_string(updateStatus_.progress)+"%":updateStatus_.message);
   if(updateStatus_.phase==UpdatePhase::Available)lv_obj_remove_state(updateButton_,LV_STATE_DISABLED);else lv_obj_add_state(updateButton_,LV_STATE_DISABLED);
- }else if(view_==View::WifiSetup){text(value_,updateStatus_.setupNetwork);text(detail_,updateStatus_.phase==UpdatePhase::Setup?"Password: "+updateStatus_.setupPassword:updateStatus_.message);}
+ }else if(view_==View::WifiSetup){
+  bool ready=updateStatus_.phase==UpdatePhase::Setup&&!updateStatus_.setupNetwork.empty();
+  if(ready){
+   auto payload=wifiSetupQr(updateStatus_.setupNetwork,updateStatus_.setupPassword);
+   if(payload!=setupQrPayload_){
+    ready=lv_qrcode_update(setupQr_,payload.data(),static_cast<uint32_t>(payload.size()))==LV_RESULT_OK;
+    if(ready)setupQrPayload_=std::move(payload);
+   }
+  }
+  if(ready){lv_obj_remove_flag(lv_obj_get_parent(setupQr_),LV_OBJ_FLAG_HIDDEN);lv_obj_add_flag(value_,LV_OBJ_FLAG_HIDDEN);}
+  else {lv_obj_add_flag(lv_obj_get_parent(setupQr_),LV_OBJ_FLAG_HIDDEN);lv_obj_remove_flag(value_,LV_OBJ_FLAG_HIDDEN);text(value_,updateStatus_.phase==UpdatePhase::Setup?updateStatus_.setupNetwork+"\nPassword: "+updateStatus_.setupPassword:updateStatus_.message);}
+  text(detail_,"If needed: http://192.168.4.1");
+ }
 }
 }

@@ -78,6 +78,7 @@ private:
  void stepButtons(int y=216);
  IFirmwareUpdate* updates_;UpdateStatus updateStatus_;std::uint64_t updateRevision_=UINT64_MAX;
  lv_obj_t* updateButton_=nullptr;lv_obj_t* newGameButton_=nullptr;
+ lv_obj_t* setupQr_=nullptr;std::string setupQrPayload_;
  DeviceProfile fallbackProfile_;DeviceProfile* profile_;Multiplayer* multiplayer_;
  std::string nameDraft_,networkSignature_;bool nameSymbols_=false,hostPending_=false;unsigned lobbyPage_=0;View arcanaReturn_=View::Startup;View informationReturn_=View::Startup;
  GameState& game_;

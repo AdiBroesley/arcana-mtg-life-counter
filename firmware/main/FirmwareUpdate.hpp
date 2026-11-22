@@ -5,6 +5,7 @@
 #include "Wifi.hpp"
 #include "esp_http_server.h"
 #include <atomic>
+#include <array>
 #include <mutex>
 namespace mtg {
 class FirmwareUpdate final:public IFirmwareUpdate {
@@ -18,6 +19,7 @@ public:
 private:
  void state(UpdatePhase phase,const std::string& message);
  void connect(bool install);void launch();void worker();void stopPortal();
+ bool startPortalDns();void pollPortalDns();
  static void run(void* context);
  static esp_err_t portalPage(httpd_req_t* request);
  static esp_err_t portalSave(httpd_req_t* request);
@@ -29,6 +31,8 @@ private:
  bool installing_=false,pendingSetup_=false,ownsRadio_=false;
  std::uint64_t deadline_=0,restartAt_=0;
  std::string portalToken_;
+ int portalDns_=-1;
+ std::array<std::uint8_t,4> portalAddress_{{192,168,4,1}};
  httpd_handle_t portal_=nullptr;
 };
 }

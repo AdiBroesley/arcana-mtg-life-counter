@@ -16,10 +16,12 @@ mtg::SimulatorHardware hardware;
 mtg::GameState game;
 mtg::AppUI* app;
 class TestUpdate final:public mtg::IFirmwareUpdate {
-public:mtg::UpdateStatus current;unsigned checks=0;
+public:mtg::UpdateStatus current;unsigned checks=0,setups=0,cancels=0;
  mtg::UpdateStatus status()const override{return current;}
  void check()override{++checks;current.phase=mtg::UpdatePhase::Current;current.message="You have the latest firmware";++current.revision;}
- void install()override{}void setup()override{}void cancel()override{}
+ void install()override{}
+ void setup()override{++setups;current.phase=mtg::UpdatePhase::Setup;current.setupNetwork="ARCANA-SETUP-1234ABCD";current.setupPassword="001122334455";++current.revision;}
+ void cancel()override{++cancels;if(current.phase==mtg::UpdatePhase::Setup){current.phase=mtg::UpdatePhase::Offline;++current.revision;}}
 };
 class TestRandom final:public mtg::IRandom {
 public:
@@ -66,6 +68,11 @@ lv_obj_t* find(lv_obj_t* parent,const std::string& text) {
  for(unsigned i=0;i<lv_obj_get_child_count(parent);++i)if(auto* found=find(lv_obj_get_child(parent,i),text))return found;
  return nullptr;
 }
+lv_obj_t* findQr(lv_obj_t* parent){
+ if(lv_obj_check_type(parent,&lv_qrcode_class))return parent;
+ for(unsigned i=0;i<lv_obj_get_child_count(parent);++i)if(auto* found=findQr(lv_obj_get_child(parent,i)))return found;
+ return nullptr;
+}
 void click(const std::string& text) {
  tick();auto* target=find(lv_screen_active(),text);auto* wedgeLabel=(text.size()==2&&text[0]=='P'&&text[1]>='2'&&text[1]<='6')?target:nullptr;check(target!=nullptr,"missing label: "+text);auto* labelTarget=target;bool wedge=target==wedgeLabel||text=="New Game"||text=="Flip Coin"||text=="Roll"||text=="End Game"||text=="Brightness";
  while(target && !lv_obj_check_type(target,&lv_button_class))target=lv_obj_get_parent(target);
@@ -108,9 +115,19 @@ int main() {
  check(lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Update")),LV_STATE_DISABLED),"Update is disabled until a newer release is known");
  click("About");check(find(lv_screen_active(),"A R C A N A")&&find(lv_screen_active(),std::string("Version ")+mtg::appInfo::version),"About shows product and installed version");check(find(lv_screen_active(),"michaeldengl@hotmail.com")&&find(lv_screen_active(),"MagicTG Kreuzlingen"),"About contains the approved public contact details");
  screenshot("ui-about.bmp");click("MagicTG Kreuzlingen");screenshot("ui-whatsapp.bmp");click("Back");click("Wi-Fi & Updates");click("Check");check(updates.checks==1,"manual release check reaches the update service");click("Back");check(find(lv_screen_active(),std::string("Version ")+mtg::appInfo::version),"updates Back returns one step to About");click("Back");
- updates.current.phase=mtg::UpdatePhase::Available;updates.current.latest="0.15.2";updates.current.message="New version ready to install";++updates.current.revision;tick();
+ click("About");click("Wi-Fi & Updates");click("Wi-Fi setup");tick();
+ auto* setupQr=findQr(lv_screen_active());check(updates.setups==1&&setupQr&&lv_obj_is_visible(setupQr),"Wi-Fi setup displays a QR for the active temporary network");
+ screenshot("ui-wifi-setup.bmp");
+ lv_area_t qrArea,setupBackArea;lv_obj_get_coords(setupQr,&qrArea);lv_obj_get_coords(lv_obj_get_parent(find(lv_screen_active(),"Back")),&setupBackArea);
+ check(qrArea.y2<setupBackArea.y1&&qrArea.x1>=72&&qrArea.x2<=288,"Back and the round screen leave the Wi-Fi QR unobstructed");
+ check(find(lv_screen_active(),"If needed: http://192.168.4.1"),"Wi-Fi setup retains the manual page address");
+ updates.current.phase=mtg::UpdatePhase::Connecting;updates.current.message="Connecting to Wi-Fi...";++updates.current.revision;tick();
+ check(!lv_obj_is_visible(setupQr)&&find(lv_screen_active(),"Connecting to Wi-Fi..."),"Connecting hides the expired setup QR");
+ updates.current.phase=mtg::UpdatePhase::Current;++updates.current.revision;tick();check(find(lv_screen_active(),"FIRMWARE"),"A completed setup returns to firmware status");
+ click("Wi-Fi setup");auto cancellations=updates.cancels;click("Back");check(updates.cancels==cancellations+1&&find(lv_screen_active(),"FIRMWARE"),"Setup Back closes the temporary network and returns one level");click("Back");click("Back");
+ updates.current.phase=mtg::UpdatePhase::Available;updates.current.latest="0.15.3";updates.current.message="New version ready to install";++updates.current.revision;tick();
  check(!lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Update")),LV_STATE_DISABLED),"compatible newer release enables Update");
- click("Update");check(find(lv_screen_active(),"Latest 0.15.2"),"update page shows the available version");screenshot("ui-updates.bmp");click("Back");
+ click("Update");check(find(lv_screen_active(),"Latest 0.15.3"),"update page shows the available version");screenshot("ui-updates.bmp");click("Back");
  updates.current.phase=mtg::UpdatePhase::Current;++updates.current.revision;tick();
  check(lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Update")),LV_STATE_DISABLED),"Update disables when no newer release exists");
  rotate(100);check(!game.state().active && game.player().life==40,"startup rotary cannot edit game");

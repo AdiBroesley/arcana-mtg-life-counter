@@ -228,6 +228,7 @@ void AppUI::build() {
  lv_obj_clean(screen_);bindings_.clear();tabEdgePoints_.clear();
  fadeCover_=nullptr;
  updateButton_=newGameButton_=nullptr;
+ setupQr_=nullptr;setupQrPayload_.clear();
  undoCurvedText_.clear();undoArc_=nullptr;battery_=nullptr;brightnessSlider_=nullptr;batteryState_=-2;
  recipientLabel_=nullptr;lifeMarker_=lifeRight_=value_=detail_=hint_=aux_=status_=poison_=damage_=scroll_=apply_=mode_=undo_=redo_=nullptr;
  tabValues_.fill(nullptr);

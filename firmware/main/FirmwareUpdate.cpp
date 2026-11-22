@@ -1,4 +1,5 @@
 #include "FirmwareUpdate.hpp"
+#include "core/WifiSetup.hpp"
 #include "esp_app_desc.h"
 #include "esp_app_format.h"
 #include "esp_crt_bundle.h"
@@ -10,6 +11,9 @@
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 #include "esp_sntp.h"
+#include "esp_netif.h"
+#include "lwip/sockets.h"
+#include <fcntl.h>
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -112,7 +116,31 @@ void FirmwareUpdate::connect(bool install){
 }
 void FirmwareUpdate::check(){if(!active())connect(false);}
 void FirmwareUpdate::install(){if(status().phase==UpdatePhase::Available)connect(true);}
-void FirmwareUpdate::stopPortal(){if(portal_){httpd_stop(portal_);portal_=nullptr;}}
+void FirmwareUpdate::stopPortal(){
+ if(portalDns_>=0){close(portalDns_);portalDns_=-1;}
+ if(portal_){httpd_stop(portal_);portal_=nullptr;}
+}
+bool FirmwareUpdate::startPortalDns(){
+ auto* netif=esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");esp_netif_ip_info_t info{};
+ if(!netif||esp_netif_get_ip_info(netif,&info)!=ESP_OK)return false;
+ memcpy(portalAddress_.data(),&info.ip.addr,portalAddress_.size());
+ portalDns_=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);
+ if(portalDns_<0)return false;
+ sockaddr_in local{};local.sin_family=AF_INET;local.sin_port=htons(53);local.sin_addr.s_addr=info.ip.addr;
+ if(bind(portalDns_,reinterpret_cast<sockaddr*>(&local),sizeof(local))<0||fcntl(portalDns_,F_SETFL,O_NONBLOCK)<0){close(portalDns_);portalDns_=-1;return false;}
+ return true;
+}
+void FirmwareUpdate::pollPortalDns(){
+ if(portalDns_<0)return;
+ // Bound work per UI iteration; DNS never blocks input, drawing or Back.
+ for(unsigned packet=0;packet<4;++packet){
+  std::array<std::uint8_t,513> query{};sockaddr_in peer{};socklen_t length=sizeof(peer);
+  int count=recvfrom(portalDns_,query.data(),query.size(),0,reinterpret_cast<sockaddr*>(&peer),&length);
+  if(count<=0)break;
+  auto reply=captiveDnsReply(query.data(),static_cast<std::size_t>(count),portalAddress_);
+  if(!reply.empty())sendto(portalDns_,reply.data(),reply.size(),0,reinterpret_cast<sockaddr*>(&peer),length);
+ }
+}
 void FirmwareUpdate::cancel(){
  if(status().phase==UpdatePhase::Installing||status().phase==UpdatePhase::Ready)return;
  pendingSetup_=false;cancelled_=true;stopPortal();if(radio_.updateNetwork())radio_.stopNetwork();ownsRadio_=false;
@@ -127,14 +155,25 @@ void FirmwareUpdate::setup(){
  if(!radio_.setupNetwork(network,key)){state(UpdatePhase::Error,"Wi-Fi setup unavailable");return;}
  portalToken_=std::string(key)+suffix;
  ownsRadio_=true;{std::lock_guard<std::mutex> lock(mutex_);status_.setupNetwork=network;status_.setupPassword=key;}
- httpd_config_t config=HTTPD_DEFAULT_CONFIG();config.max_uri_handlers=2;config.stack_size=6144;config.lru_purge_enable=true;
+ httpd_config_t config=HTTPD_DEFAULT_CONFIG();config.max_uri_handlers=2;config.stack_size=6144;config.lru_purge_enable=true;config.uri_match_fn=httpd_uri_match_wildcard;
  if(httpd_start(&portal_,&config)!=ESP_OK){radio_.stopNetwork();state(UpdatePhase::Error,"Wi-Fi setup unavailable");return;}
- httpd_uri_t page{};page.uri="/";page.method=HTTP_GET;page.handler=portalPage;page.user_ctx=this;
+ httpd_uri_t page{};page.uri="/*";page.method=HTTP_GET;page.handler=portalPage;page.user_ctx=this;
  httpd_uri_t save{};save.uri="/save";save.method=HTTP_POST;save.handler=portalSave;save.user_ctx=this;
- httpd_register_uri_handler(portal_,&page);httpd_register_uri_handler(portal_,&save);
+ if(httpd_register_uri_handler(portal_,&page)!=ESP_OK||httpd_register_uri_handler(portal_,&save)!=ESP_OK||!startPortalDns()){
+  stopPortal();radio_.stopNetwork();ownsRadio_=false;state(UpdatePhase::Error,"Wi-Fi setup unavailable");return;
+ }
  deadline_=now()+180000;state(UpdatePhase::Setup,"Connect using your phone");
 }
-esp_err_t FirmwareUpdate::portalPage(httpd_req_t* r){httpd_resp_set_type(r,"text/html");httpd_resp_set_hdr(r,"Cache-Control","no-store");std::string page=portalHtml;auto marker=page.find("@TOKEN@");page.replace(marker,7,static_cast<FirmwareUpdate*>(r->user_ctx)->portalToken_);return httpd_resp_send(r,page.data(),page.size());}
+esp_err_t FirmwareUpdate::portalPage(httpd_req_t* r){
+ httpd_resp_set_hdr(r,"Cache-Control","no-store");
+ // Phone connectivity probes must reach the real setup URL, not a success/204
+ // response that would falsely claim this temporary network has internet.
+ if(strcmp(r->uri,"/")!=0){
+  httpd_resp_set_status(r,"302 Found");httpd_resp_set_hdr(r,"Location","http://192.168.4.1/");
+  return httpd_resp_sendstr(r,"Open ARCANA Wi-Fi setup");
+ }
+ httpd_resp_set_type(r,"text/html");std::string page=portalHtml;auto marker=page.find("@TOKEN@");page.replace(marker,7,static_cast<FirmwareUpdate*>(r->user_ctx)->portalToken_);return httpd_resp_send(r,page.data(),page.size());
+}
 esp_err_t FirmwareUpdate::portalSave(httpd_req_t* r){
  if(r->content_len<=0||r->content_len>512)return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"Invalid settings");
  std::string body(r->content_len,'\0');std::size_t read=0;
@@ -193,6 +232,7 @@ void FirmwareUpdate::worker(){
  if(awake){esp_pm_lock_release(awake);esp_pm_lock_delete(awake);}if(cpu){esp_pm_lock_release(cpu);esp_pm_lock_delete(cpu);}
 }
 void FirmwareUpdate::poll(){
+ pollPortalDns();
  if(game_.state().active&&active()&&!cancelled_)cancel();
  if(done_.exchange(false)){
   if(radio_.updateNetwork())radio_.stopNetwork();ownsRadio_=false;

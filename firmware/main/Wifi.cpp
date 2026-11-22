@@ -55,6 +55,22 @@ struct WifiTransport::Impl {
      !check(esp_event_handler_instance_register(IP_EVENT,ESP_EVENT_ANY_ID,event,this,&ipHandler),"IP events"))return false;
   initialized=true;return true;
  }
+ bool setupDns(bool enabled){
+  // Called with the AP stopped. Do not leave setup DNS advertised by later
+  // multiplayer hosts using the same persistent network interface.
+  auto stopped=esp_netif_dhcps_stop(accessPoint);
+  if(stopped!=ESP_OK&&stopped!=ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED)return check(stopped,"stop setup DHCP");
+  esp_netif_ip_info_t info{};esp_netif_dns_info_t dns{};dns.ip.type=ESP_IPADDR_TYPE_V4;
+  if(enabled&&esp_netif_get_ip_info(accessPoint,&info)!=ESP_OK)return false;
+  dns.ip.u_addr.ip4.addr=enabled?info.ip.addr:0;
+  uint8_t offer=enabled?1:0;
+  bool configured=check(esp_netif_set_dns_info(accessPoint,ESP_NETIF_DNS_MAIN,&dns),"setup DNS address")&&
+   check(esp_netif_dhcps_option(accessPoint,ESP_NETIF_OP_SET,ESP_NETIF_DOMAIN_NAME_SERVER,&offer,sizeof(offer)),"setup DNS offer");
+  // Explicit stop puts DHCP in STOPPED, which AP_START does not restart. Start
+  // here also rearms its automatic start when the interface is still down.
+  auto started=esp_netif_dhcps_start(accessPoint);
+  return configured&&(started==ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED||check(started,"start setup DHCP"));
+ }
  bool start(wifi_mode_t type){return check(esp_wifi_set_mode(type),"radio mode");}
  bool run(){if(!check(esp_wifi_start(),"radio start"))return false;running=true;esp_wifi_set_ps(WIFI_PS_MIN_MODEM);return true;}
  void refreshAddress(){
@@ -71,8 +87,9 @@ WifiTransport::~WifiTransport(){
  stopNetwork();auto& p=*impl_;if(p.initialized){esp_event_handler_instance_unregister(WIFI_EVENT,ESP_EVENT_ANY_ID,p.wifiHandler);esp_event_handler_instance_unregister(IP_EVENT,ESP_EVENT_ANY_ID,p.ipHandler);esp_wifi_deinit();esp_netif_destroy_default_wifi(p.station);esp_netif_destroy_default_wifi(p.accessPoint);}
 }
 void WifiTransport::stopNetwork(){
- auto& p=*impl_;p.mode=Impl::Off;p.lan.reset();p.ip.clear();
+ auto& p=*impl_;bool setup=p.mode==Impl::Setup;p.mode=Impl::Off;p.lan.reset();p.ip.clear();
  if(p.running){esp_wifi_stop();p.running=false;}
+ if(setup)p.setupDns(false);
  p.scanBusy=false;p.scanDone=false;p.stationConnected=false;p.found.clear();p.ssid.clear();p.error.clear();
 }
 bool WifiTransport::hostNetwork(const std::string& name){
@@ -109,7 +126,7 @@ bool WifiTransport::setupNetwork(const std::string& ssid,const std::string& pass
  stopNetwork();auto& p=*impl_;if(!p.initialize()||!p.start(WIFI_MODE_AP))return false;
  wifi_config_t config{};memcpy(config.ap.ssid,ssid.data(),ssid.size());config.ap.ssid_len=ssid.size();
  memcpy(config.ap.password,password.data(),password.size());config.ap.authmode=WIFI_AUTH_WPA2_PSK;config.ap.channel=6;config.ap.max_connection=2;config.ap.beacon_interval=100;
- if(!p.check(esp_wifi_set_config(WIFI_IF_AP,&config),"setup config")||!p.run())return false;
+ if(!p.check(esp_wifi_set_config(WIFI_IF_AP,&config),"setup config")||!p.setupDns(true)||!p.run()){p.setupDns(false);return false;}
  p.mode=Impl::Setup;return true;
 }
 bool WifiTransport::updateNetwork()const{return impl_->mode==Impl::Internet||impl_->mode==Impl::Setup;}

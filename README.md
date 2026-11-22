@@ -1,6 +1,6 @@
 # Arcana / MTG Life Counter
 
-**Version 0.15.1** - Windows digital twin, multi-format play and local-network multiplayer.
+**Version 0.15.2** - Windows digital twin, multi-format play and local-network multiplayer.
 
 A native Windows digital twin of a round 360 x 360 knob display, with a shared LVGL interface designed for eventual ESP32-S3 deployment. The app supports Commander, Classic, Commander 2HG, Brawl and Limited, with in-memory matches and a touch/rotary interface.
 
@@ -68,12 +68,14 @@ Startup offers **New Game**, **Update** and **About**. Update is enabled only af
 
 About shows the installed version, Michael Dengl's contact email, and **MagicTG Kreuzlingen**. Tap the email or group button to display its QR code. The contact links are `michaeldengl@hotmail.com` and the supplied MagicTG Kreuzlingen WhatsApp invitation.
 
+Wi-Fi setup displays a scannable code containing the temporary ARCANA network name and password. Scan it with your phone, accept Join, then follow the Wi-Fi sign-in page or notification to enter your home 2.4 GHz Wi-Fi details. If the page does not appear, open **http://192.168.4.1**. Setup closes on Back or after three minutes; it does not run during games. [Wi-Fi setup preview](docs/previews/ui-wifi-setup.png).
+
 | About and contact | MagicTG Kreuzlingen invite | Firmware updates |
 | --- | --- | --- |
 | ![About ARCANA](docs/previews/ui-about.png) | ![WhatsApp invite QR](docs/previews/ui-whatsapp.png) | ![Firmware updates](docs/previews/ui-updates.png) |
 
 
-Wireless installation requires a one-time USB upgrade to the two-slot firmware layout. Your device name/profile storage stays at the same flash address. See the [wireless update setup and release guide](firmware/OTA.md). The first implementation remains under device validation until its full HTTPS download/reboot flow is exercised against a published release.
+Wireless installation requires a one-time USB upgrade to the two-slot firmware layout. Your device name/profile storage stays at the same flash address. See the [wireless update setup and release guide](firmware/OTA.md). The owner's device successfully downloaded v0.15.1 from GitHub over Wi-Fi, booted from the second slot, confirmed its boot health and reported the installed release as current. The v0.15.2 QR/captive-portal phone flow still needs a physical phone check.
 
 ## Single and Multi Arcana
 
