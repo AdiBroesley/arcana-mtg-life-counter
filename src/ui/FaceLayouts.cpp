@@ -1,12 +1,10 @@
+#include "assets/Fonts.hpp"
 #include "FaceDesigns.hpp"
 #include "FaceLayouts.hpp"
 #include "ui/AppUI.hpp"
 #include "ui/Widgets/DialWidgets.hpp"
 #include <cmath>
 #include <cstring>
-LV_FONT_DECLARE(life_digits);
-LV_FONT_DECLARE(heart_symbol);
-LV_FONT_DECLARE(tab_font);
 namespace mtg {
 using namespace widgets;
 namespace {

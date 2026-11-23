@@ -1,7 +1,7 @@
+#include "assets/Fonts.hpp"
 #include "ToolIcons.hpp"
 #include "DialWidgets.hpp"
 #include "core/Player.hpp"
-LV_FONT_DECLARE(mtg_symbols);
 namespace mtg::widgets {
 namespace {
 void rectangle(lv_obj_t* parent,int x,int y,int w,int h,unsigned color,int radius=0) {

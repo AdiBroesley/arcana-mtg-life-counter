@@ -1,9 +1,9 @@
+#include "assets/Fonts.hpp"
 #include "AppUI.hpp"
 #include "Widgets/DialWidgets.hpp"
 #include "Widgets/ToolIcons.hpp"
 #include <algorithm>
 #include <limits>
-LV_FONT_DECLARE(life_digits);
 namespace mtg {
 using namespace widgets;
 namespace {

@@ -1,3 +1,4 @@
+#include "assets/Fonts.hpp"
 #include "AppUI.hpp"
 #include "platform/IProfiler.hpp"
 #include "Widgets/DialWidgets.hpp"
@@ -7,9 +8,6 @@
 #include <algorithm>
 #include <cmath>
 #include <chrono>
-LV_FONT_DECLARE(life_digits);
-LV_FONT_DECLARE(heart_symbol);
-LV_FONT_DECLARE(tab_font);
 namespace mtg {
 using namespace widgets;
 namespace {

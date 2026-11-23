@@ -1,9 +1,9 @@
+#include "assets/Fonts.hpp"
 #include "AppUI.hpp"
 #include "FaceDesigns.hpp"
 #include "Widgets/DialWidgets.hpp"
 #include "src/core/lv_obj_event_private.h"
 #include <cmath>
-LV_FONT_DECLARE(tab_font);
 namespace mtg {
 using namespace widgets;
 void AppUI::toolSectorHit(lv_event_t* event) {
