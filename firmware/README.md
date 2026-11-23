@@ -4,6 +4,12 @@ This ESP-IDF build uses the existing ARCANA game engine and LVGL 9.2.2 interface
 
 The first hardware installation requires a complete, verified factory flash backup. Build success alone does not establish that display orientation, touch or rotation work on a physical unit.
 
+## Watch faces and brightness (v0.16.0)
+
+The firmware now compiles the same eleven watch-face renderers as the desktop. **Gear > Watch Face** browses three radial pages; selection changes only local presentation and is saved independently of gameplay. **Gear > Brightness** saves after 750 ms without another adjustment, or on leaving the screen. Device-profile storage retains its existing address and alternating checksum slots. Legacy profiles preserve their identity and existing hardware brightness default. Saved 0% brightness can be recovered with a clockwise gesture, restoring 10% without editing life.
+
+No game autosaving has been reintroduced. These additions build for the existing OTA slots; see [wireless installation](OTA.md). New face performance and the settings flow require an on-device check after installation.
+
 ## Bring-up status (2026-11-20)
 
 The first image built successfully and was installed on the connected ESP32-S3 revision 0.2 unit after a full 16 MB factory backup was read and verified. Bootloader, partition table and application flash verification all passed. A clean captured boot confirms 16 MB QIO flash at 80 MHz, 8 MB OPI PSRAM at 80 MHz with a passing memory test, successful ST77916/CST816S initialization, and `ARCANA: JC3636K718 firmware started; Wi-Fi disabled`. The application image is 1,274,624 bytes. The private backup and serial logs remain outside Git.

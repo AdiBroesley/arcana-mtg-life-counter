@@ -126,6 +126,7 @@ void AppUI::refreshLifecycle() {
  if(view_==View::PlayerSetup){text(value_,draftFormat_==GameFormat::TwoHeadedGiant?std::to_string(draftPlayers_/2)+" Teams / "+std::to_string(draftPlayers_)+"P":std::to_string(draftPlayers_)+"-Players");if(hint_)text(hint_,notice_);}
 }
 void AppUI::buildDial() {
+ if(selectedPlayer_==1&&redesignedFace(faceDesign_)){buildFaceLayout();return;}
  if(selectedPlayer_==1)playerTabs();
  if(selectedPlayer_==1) {
   counterRockers();
@@ -174,7 +175,7 @@ void AppUI::buildDial() {
   lv_obj_add_flag(undo_,LV_OBJ_FLAG_ADV_HITTEST);lv_obj_add_event_cb(undo_,undoSectorHit,LV_EVENT_HIT_TEST,this);
   auto* undoText=lv_obj_get_child(undo_,0);lv_obj_set_align(undoText,LV_ALIGN_TOP_LEFT);lv_obj_set_pos(undoText,85,302);lv_obj_set_size(undoText,156,18);
   lv_obj_set_style_text_opa(undoText,0,0);
-
+  if(faceDesign_)decorateFaceConcept();
  }else {
   if(networkFace()||!usesCommanderDamage(game_.state().format)) {
    bool open=networkFace()&&multiplayer_->opponents()[selectedPlayer_-2].id.empty();bool editable=!networkFace()||(open&&multiplayer_->hosting());
@@ -200,6 +201,7 @@ void AppUI::buildDial() {
  }
 }
 bool AppUI::lifeHoldPositionValid() const {
+ if(redesignedFace(faceDesign_))return redesignedLifeHoldValid();
  auto point=hardware_.touch();lv_area_t area;lv_obj_get_coords(screen_,&area);
  int x=point.x-area.x1,y=point.y-area.y1,dx=x-180,dy=y-190;
  return dx*dx+dy*dy<=108*108 && dx*dx+dy*dy>23*23 && (lifeHoldSign_>0?x>=180:x<180);
@@ -400,6 +402,7 @@ void AppUI::refreshDial() {
  refreshBattery();
  refreshTabs();
  if(selectedPlayer_==1) {
+  if(redesignedFace(faceDesign_)){refreshFaceLayout();return;}
   auto number=std::to_string(game_.player().life);if(game_.player().life>=0 && number.size()<2)number="0"+number;auto split=(number.size()+1)/2;
   auto left=number.substr(0,split),right=number.substr(split);auto longest=std::max(left.size(),right.size());
   const auto* font=longest<=1?&life_digits:longest<=2?&lv_font_montserrat_48:longest<=3?&lv_font_montserrat_32:longest<=6?&lv_font_montserrat_20:&lv_font_montserrat_14;
@@ -427,6 +430,7 @@ void AppUI::refreshDial() {
     auto* badge=lv_obj_get_parent(count);lv_obj_set_width(badge,width);lv_obj_set_x(badge,(side?345:56)-width);lv_obj_set_width(count,width-4);lv_obj_center(count);
    }
   }
+  if(faceDesign_)refreshFaceConcept();
  }else {
   if(networkFace()){auto others=multiplayer_->opponents();if(selectedPlayer_-2<others.size())number(value_,std::to_string(others[selectedPlayer_-2].life));return;}
   if(!usesCommanderDamage(game_.state().format)){number(value_,std::to_string(game_.life(selectedPlayer_)));lv_obj_set_style_text_color(value_,lv_color_hex(game_.life(selectedPlayer_)<=0?red:ink),0);return;}

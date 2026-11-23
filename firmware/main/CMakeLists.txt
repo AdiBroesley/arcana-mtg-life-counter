@@ -7,6 +7,8 @@ idf_component_register(
   "${APP_ROOT}/src/core/Multiplayer.cpp"
   "${APP_ROOT}/src/ui/AppUI.cpp"
   "${APP_ROOT}/src/ui/AppUIDial.cpp"
+  "${APP_ROOT}/src/ui/FaceDesigns.cpp"
+  "${APP_ROOT}/src/ui/FaceLayouts.cpp"
   "${APP_ROOT}/src/ui/AppUITools.cpp"
   "${APP_ROOT}/src/ui/AppUIInformation.cpp"
   "${APP_ROOT}/src/ui/AppUIMultiplayer.cpp"

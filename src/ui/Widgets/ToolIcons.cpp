@@ -30,7 +30,11 @@ ToolIcon counterIcon(unsigned counter) {
 }
 void drawToolIcon(lv_obj_t* parent,ToolIcon icon,int x,int y,unsigned color) {
  auto* root=box(parent,x,y,30,30);lv_obj_set_style_bg_opa(root,0,0);lv_obj_remove_flag(root,LV_OBJ_FLAG_CLICKABLE);
- if(icon==ToolIcon::Treasure) {
+ if(icon==ToolIcon::WatchFace) {
+  auto* dial=box(root,2,2,26,26,background);lv_obj_set_style_bg_opa(dial,0,0);lv_obj_set_style_radius(dial,LV_RADIUS_CIRCLE,0);lv_obj_set_style_border_width(dial,2,0);lv_obj_set_style_border_color(dial,lv_color_hex(color),0);lv_obj_remove_flag(dial,LV_OBJ_FLAG_CLICKABLE);
+  static const lv_point_precise_t hand[]{{15,7},{15,15},{22,19}};line(root,hand,3,color);
+  rectangle(root,5,14,3,2,color);rectangle(root,14,23,2,3,color);
+ }else if(icon==ToolIcon::Treasure) {
   // Original chest artwork, not an asserted official Wizards symbol.
   static const lv_point_precise_t lid[]{{3,13},{5,5},{23,5},{27,13},{3,13}};
   static const lv_point_precise_t body[]{{4,16},{4,26},{26,26},{26,16}};

@@ -14,7 +14,7 @@ unsigned counterColor(Counter c) {
 }
 std::string signedNumber(std::int64_t n){return std::to_string(n);}
 }
-AppUI::AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile,Multiplayer* multiplayer,IFirmwareUpdate* updates):updates_(updates),profile_(profile?profile:&fallbackProfile_),multiplayer_(multiplayer),game_(game),hardware_(hardware),random_(random),screen_(screen) {build();refresh();}
+AppUI::AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile,Multiplayer* multiplayer,IFirmwareUpdate* updates):updates_(updates),profile_(profile?profile:&fallbackProfile_),multiplayer_(multiplayer),game_(game),hardware_(hardware),random_(random),screen_(screen) {faceDesign_=profile_->faceDesign();if(profile_->hasBrightness())hardware_.setBrightness(profile_->brightness());observedBrightness_=hardware_.brightness();build();refresh();}
 void AppUI::clicked(lv_event_t* event) {
  auto* binding=static_cast<Binding*>(lv_event_get_user_data(event));
  if(binding->ui->hardware_.powered()) binding->ui->handle(binding->action,binding->arg);
@@ -69,7 +69,7 @@ lv_obj_t* AppUI::bigValue(int y) {
 void AppUI::stepButtons(int y) {
  button(screen_,"-",74,y,70,42,Minus);button(screen_,"+",216,y,70,42,Plus);
 }
-void AppUI::navigate(View view) {transitionPending_=true;lifeHoldActive_=false;lifeHoldCancelled_=true;view_=view;notice_.clear();rebuild_=true;}
+void AppUI::navigate(View view) {if(view_==View::Brightness&&view!=View::Brightness)saveBrightness();transitionPending_=true;lifeHoldActive_=false;lifeHoldCancelled_=true;view_=view;notice_.clear();rebuild_=true;}
 void AppUI::beginArcanaSelection(View returnTo){arcanaReturn_=returnTo;hostPending_=false;navigate(View::ArcanaMode);}
 void AppUI::beginFormatSelection(View returnTo) {formatReturn_=returnTo;draftFormat_=game_.state().format;draftPlayers_=draftFormat_==GameFormat::Commander||draftFormat_==GameFormat::TwoHeadedGiant?4:2;navigate(View::FormatSelect);}
 void AppUI::requestNewGame() {if(game_.state().active){formatReturn_=View::Home;navigate(View::ResetConfirm);}else beginArcanaSelection(View::Startup);}
@@ -87,6 +87,9 @@ void AppUI::handle(Action action,std::uint32_t arg) {
 
  if(updateStatus_.phase==UpdatePhase::Installing||updateStatus_.phase==UpdatePhase::Ready)return;
  switch(action) {
+  case OpenFaces:facePage_=faceDesign_/4;navigate(View::FaceSelect);break;
+  case FacePage:facePage_=arg;navigate(View::FaceSelect);break;
+  case ChooseFace:if(profile_->setFaceDesign(arg))setFaceDesign(arg);else {notice_=profile_->error();rebuild_=true;}break;
   case ContactLink:contactLink_=arg;navigate(View::ContactCode);break;
   case OpenAbout:navigate(View::About);break;
   case OpenUpdates:informationReturn_=view_;navigate(View::Updates);break;
@@ -229,6 +232,7 @@ void AppUI::build() {
  fadeCover_=nullptr;
  updateButton_=newGameButton_=nullptr;
  setupQr_=nullptr;setupQrPayload_.clear();
+ layoutLifeTargets_.fill(nullptr);layoutControls_.clear();
  undoCurvedText_.clear();undoArc_=nullptr;battery_=nullptr;brightnessSlider_=nullptr;batteryState_=-2;
  recipientLabel_=nullptr;lifeMarker_=lifeRight_=value_=detail_=hint_=aux_=status_=poison_=damage_=scroll_=apply_=mode_=undo_=redo_=nullptr;
  tabValues_.fill(nullptr);
@@ -246,7 +250,7 @@ void AppUI::build() {
   case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:buildInformation();break;
   case View::ArcanaMode:case View::NameSetup:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:buildMultiplayer();break;
   case View::Startup:case View::FormatSelect:case View::PlayerSetup:buildLifecycle();break;
-  case View::EndConfirm:case View::Brightness:case View::Gear:case View::ResetConfirm:case View::CoinResult:case View::RollResult:buildTools();break;
+  case View::FaceSelect:case View::EndConfirm:case View::Brightness:case View::Gear:case View::ResetConfirm:case View::CoinResult:case View::RollResult:buildTools();break;
   case View::Home:buildDial();break;
   case View::CounterPicker:buildPicker();break;
   case View::Menu: {
@@ -401,6 +405,10 @@ void AppUI::advanceTransition() {
  // Ease out over six short frames, then perform no further animation work.
  unsigned remaining=180-elapsed;setContentOpacity(static_cast<lv_opa_t>(255-255*remaining*remaining/(180*180)));
 }
+void AppUI::saveBrightness(){
+ brightnessPending_=false;observedBrightness_=hardware_.brightness();
+ if((!profile_->hasBrightness()||profile_->brightness()!=observedBrightness_)&&!profile_->setBrightness(observedBrightness_)){notice_=profile_->error();refreshDirty_=true;}
+}
 void AppUI::update() {
  lastUpdateWork_=false;
  if(updates_){auto status=updates_->status();if(status.revision!=updateRevision_){updateRevision_=status.revision;updateStatus_=std::move(status);if(view_==View::WifiSetup&&(updateStatus_.phase==UpdatePhase::Available||updateStatus_.phase==UpdatePhase::Current||updateStatus_.phase==UpdatePhase::Error))navigate(View::Updates);if(view_==View::Startup||view_==View::About||view_==View::Updates||view_==View::WifiSetup)refreshDirty_=true;}}
@@ -416,7 +424,12 @@ void AppUI::update() {
  if(lifeHoldActive_){if(!hardware_.powered()){lifeHoldActive_=false;lifeHoldCancelled_=true;}else if(hardware_.touch().pressed)repeatLifeHold(lv_tick_get());}
  if(view_!=View::ContactCode&&view_!=View::About&&view_!=View::Updates&&view_!=View::WifiSetup&&view_!=View::Startup && view_!=View::PlayerSetup && view_!=View::FormatSelect && view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby && !game_.state().active)navigate(View::Startup);
  game_.setActionTime(lv_tick_get());
- auto delta=hardware_.takeRotation();if(delta){auto before=game_.revision();if(hardware_.powered())adjust(delta);hardware_.rotationApplied(game_.revision()!=before);}
+ auto delta=hardware_.takeRotation();if(delta){auto before=game_.revision();if(hardware_.powered()){
+  // A saved 0% must never leave the startup screen impossible to reach.
+  // Consume the first clockwise gesture to restore a visible backlight.
+  if(hardware_.brightness()==0&&view_!=View::Brightness){if(delta>0)hardware_.setBrightness(10);}
+  else adjust(delta);
+ }hardware_.rotationApplied(game_.revision()!=before);}
  if((view_==View::Damage && !game_.source(sourceId_)) || (view_==View::Casts && ownIndex_>=game_.state().commanders.size()))navigate(View::Menu);
  if(game_.revision()!=revision_) {
   refreshDirty_=true;
@@ -424,6 +437,9 @@ void AppUI::update() {
   if(view_==View::Menu || view_==View::Profiles || view_==View::Status || view_==View::History || view_==View::Sources || view_==View::Commanders)rebuild_=true;
   revision_=game_.revision();
  }
+ auto brightnessNow=hardware_.brightness();
+ if(brightnessNow!=observedBrightness_){observedBrightness_=brightnessNow;brightnessChangedAt_=lv_tick_get();brightnessPending_=true;}
+ if(brightnessPending_&&lv_tick_get()-brightnessChangedAt_>=750)saveBrightness();
  if(view_==View::Brightness && value_ && std::to_string(hardware_.brightness())+"%"!=lv_label_get_text(value_))refreshDirty_=true;
  if(view_==View::Home){refreshBattery();if(selectedPlayer_==1){auto undo=game_.recentUndoLabel(lv_tick_get());if((undo.empty()?"Undo":undo)!=undoCurvedText_)refreshDirty_=true;}}
  if(rebuild_){build();refreshDirty_=true;lastUpdateWork_=true;}

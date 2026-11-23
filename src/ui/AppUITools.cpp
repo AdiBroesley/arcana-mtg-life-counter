@@ -1,4 +1,5 @@
 #include "AppUI.hpp"
+#include "FaceDesigns.hpp"
 #include "Widgets/DialWidgets.hpp"
 #include "src/core/lv_obj_event_private.h"
 #include <cmath>
@@ -35,11 +36,22 @@ void AppUI::radialBack(Action action) {
 }
 void AppUI::buildTools() {
  if(view_==View::Gear) {
-  const char* titles[]{"New Game","Flip Coin","Roll","End Game","Brightness"};
-  const Action actions[]{AskReset,FlipCoin,RollD20,RequestEnd,OpenBrightness};
-  const ToolIcon icons[]{ToolIcon::Reset,ToolIcon::Coin,ToolIcon::D20,ToolIcon::End,ToolIcon::Brightness};
-  const unsigned colors[]{red,gold,violet,red,teal};
-  for(unsigned i=0;i<5;++i)radialSector(titles[i],i,5,actions[i],0,colors[i],icons[i]);
+  const char* titles[]{"New Game","Flip Coin","Roll","End Game","Brightness","Watch Face"};
+  const Action actions[]{AskReset,FlipCoin,RollD20,RequestEnd,OpenBrightness,OpenFaces};
+  const ToolIcon icons[]{ToolIcon::Reset,ToolIcon::Coin,ToolIcon::D20,ToolIcon::End,ToolIcon::Brightness,ToolIcon::WatchFace};
+  const unsigned colors[]{red,gold,violet,red,teal,0x496c92};
+  for(unsigned i=0;i<6;++i)radialSector(titles[i],i,6,actions[i],0,colors[i],icons[i]);
+ }else if(view_==View::FaceSelect) {
+  unsigned first=facePage_*4,count=std::min<unsigned>(4,faceDesigns.size()-first);
+  bool previous=facePage_>0,next=first+count<faceDesigns.size();unsigned sectors=count+previous+next;
+  for(unsigned i=0;i<count;++i){const auto& face=faceDesigns[first+i];
+   auto* tile=radialSector(face.name,i,sectors,ChooseFace,first+i,((face.accent&0xfefefe)>>1)+((face.background&0xfefefe)>>1),first+i==faceDesign_?ToolIcon::Confirm:ToolIcon::WatchFace);
+   auto* caption=lv_obj_get_child(tile,1);lv_obj_set_style_text_font(caption,&tab_font,0);lv_obj_set_height(caption,30);lv_label_set_long_mode(caption,LV_LABEL_LONG_WRAP);
+  }
+  unsigned index=count;
+  if(previous)radialSector("Previous",index++,sectors,FacePage,facePage_-1,0x3c5261,ToolIcon::Reset);
+  if(next)radialSector("Next",index,sectors,FacePage,facePage_+1,0x3c5261,ToolIcon::Reset);
+  if(!notice_.empty())label(screen_,"SAVE FAILED",124,111,112,&tab_font,0xffffff);
  }else if(view_==View::Brightness) {
   auto* top=radialSector("",0,3,NoAction,0,0x166853,ToolIcon::Brightness);lv_obj_clean(top);
   label(screen_,"BRIGHTNESS",105,49,150,&lv_font_montserrat_14,ink);
@@ -71,5 +83,6 @@ void AppUI::buildTools() {
   radialSector("Roll again",count-1,count,RollD20,0,violet,ToolIcon::Reset);
  }
  radialBack();
+ if(view_==View::FaceSelect)label(screen_,std::to_string(facePage_+1)+" / 3",151,195,58,&tab_font,0xaaaaaa);
 }
 }

@@ -39,12 +39,20 @@ Offline, connection failures, no release, or an incompatible release leave Updat
 Keep `src/core/AppInfo.hpp`, the top-level CMake project and `firmware/CMakeLists.txt` on the same numeric version. Build and test, then run:
 
 ```powershell
-.\.tools\esp-python\Scripts\python.exe tools/package_firmware.py --tag v0.15.3
+.\.tools\esp-python\Scripts\python.exe tools/package_firmware.py --tag v0.16.0
 ```
 
 Packaging checks the built image's project, embedded version and size, then creates `build/release-assets/arcana-jc3636k718.bin`, a JSON description and `SHA256SUMS`. The binary filename is part of the model compatibility contract. GitHub supplies its asset digest; the device requires `sha256:` followed by 64 lowercase hex digits.
 
 The included GitHub Actions workflow builds a version tag or an explicitly selected existing tag, uploads reviewable artifacts and prepares a **draft** release. Review the build and release before publishing. Devices ignore drafts and prereleases, and compare the latest stable release numerically against the installed version. Never put Wi-Fi passwords or GitHub credentials in the firmware/repository.
+
+## Version 0.16.0
+
+This release includes all eleven approved watch faces on the physical knob. **Gear > Watch Face** opens a paged radial selector; the selected face and the chosen **Gear > Brightness** level survive restart. Older profiles migrate without losing the multiplayer name, stable identity or Wi-Fi setup. Match saving remains disabled.
+
+The binary uses the existing `arcana-ota-v1` partition map and does not require another USB installation on a device already running OTA-enabled firmware. After installing, start a game and open the gear to choose a face. At saved 0% brightness, turn clockwise to recover a visible 10% without changing the match.
+
+Native validation covers the selector and restart restoration in addition to life/hold, counters, Undo, lethal conditions, multiplayer names and layouts through twelve-player 2HG. The ESP32 image is built and size/version checked before packaging. The new faces still need the owner's physical-device check after the wireless installation; desktop tests do not measure physical rendering latency.
 
 ## Validation status
 

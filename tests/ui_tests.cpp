@@ -2,6 +2,7 @@
 #include "ui/AppUI.hpp"
 #include "core/AppInfo.hpp"
 #include "platform/RoundDisplay.hpp"
+#include "ui/FaceDesigns.hpp"
 #include "SimulatorHardware.hpp"
 #include "third_party/json.hpp"
 #include <cstdlib>
@@ -31,7 +32,7 @@ public:
   if(index>=values.size()||values[index]<lower||values[index]>upper){std::cerr<<"Invalid random test sequence";std::exit(1);}return values[index++];
  }
 };
-class ProfileMemory final:public mtg::IStorage {public:std::string value;bool load(std::string& data,std::string&)override{data=value;return true;}bool save(const std::string& data,std::string&)override{value=data;return true;}};
+class ProfileMemory final:public mtg::IStorage {public:std::string value;unsigned saves=0;bool load(std::string& data,std::string&)override{data=value;return true;}bool save(const std::string& data,std::string&)override{++saves;value=data;return true;}};
 class UIWire final:public mtg::IPeerTransport {public:std::vector<mtg::PeerPacket> incoming,sent;std::string empty;bool send(const std::string& endpoint,const std::string& data)override{sent.push_back({endpoint,data});return true;}std::vector<mtg::PeerPacket> receive()override{auto result=std::move(incoming);incoming.clear();return result;}const std::string& error()const override{return empty;}};
 std::vector<uint32_t> pixels(size*size);
 unsigned flushCount=0;
@@ -355,5 +356,38 @@ int main() {
  click(LV_SYMBOL_SETTINGS);click("New Game");click("Yes");click("MULTI ARCANA");check(find(lv_screen_active(),"ALICE"),"name entry remembers saved name");click("CHANGE");check(identity.name()=="ALICE","CHANGE preserves the previously saved name");for(const char* key:{"A","L","I","C","E"})click(key);click("OK");click("Host");click("Classic");click("Confirm");check(networking.hosting()&&find(lv_screen_active(),"Start game"),"host configures a real lobby");click("Start game");check(networking.started()&&find(lv_screen_active(),"P2"),"host starts with one device and displays an open slot");click("P2");check(find(lv_screen_active(),"Open slot"),"unclaimed peer has a clear placeholder screen");click("+");check(networking.opponents()[0].life==21&&game.player().life==20,"host tracks a player without an Arcana");screenshot("ui-open-network-slot.bmp");click("Back");
  wire.incoming.push_back({"visitor",Json{{"v",1},{"t","find"}}.dump()});tick();std::string hostedId;for(const auto& packet:wire.sent){auto value=Json::parse(packet.data);if(value["t"]=="advert")hostedId=value["game"].get<std::string>();}check(!hostedId.empty(),"host advertises its lobby");
  wire.incoming.push_back({"guest",Json{{"v",1},{"t","join"},{"game",hostedId},{"id",std::string(32,'c')},{"name","CAROL"}}.dump()});tick(12);check(find(lv_screen_active(),"CAROL")&&!find(lv_screen_active(),"P2")&&game.player().life==20&&networking.opponents()[0].life==21,"late join replaces the placeholder while preserving tracked HP");screenshot("ui-late-joined-player.bmp");
+ for(unsigned design=1;design<mtg::faceDesigns.size();++design){multiUI.setFaceDesign(design);tick(15);check(find(lv_screen_active(),"ALICE")&&find(lv_screen_active(),"CAROL"),"each face keeps the own multiplayer name and named opponents");check(multiUI.faceControlsFit(),"all multiplayer controls fit inside the circle without overlapping");}
+ networking.leave();
+ for(unsigned design=1;design<mtg::faceDesigns.size();++design){
+  std::cout<<"Checking face "<<design<<": "<<mtg::faceDesigns[design].name<<'\n';
+  game.startNewGame(4);multiUI.setFaceDesign(design);tick(18);
+  auto layout=multiUI.faceLayoutGeometry();auto lifeTargets=layout.lifeTargets();auto tap=[&](mtg::FaceRect r){clickAt(r.cx(),r.cy());};auto plus=lifeTargets[1],minus=lifeTargets[0];
+  check(multiUI.faceControlsFit(),"every complete control must fit inside the circular display without overlapping other controls");
+  check(game.player().life==40&&find(lv_screen_active(),"P2"),"each face keeps life and opponent tabs");
+  tap(plus);check(game.player().life==41,"each face keeps its increase-life tap region");tap(minus);check(game.player().life==40,"each face keeps its decrease-life tap region");
+  rotate(2);check(game.player().life==42,"each face keeps rotary life adjustment");hardware.setTouch({plus.cx(),plus.cy(),true});tick(35);check(game.player().life==42,"life hold waits its full one-second beat");hardware.setTouch({plus.cx(),plus.cy(),false});tick(5);check(game.player().life==43,"a release before one second still counts as a tap");
+  hardware.setTouch({plus.cx(),plus.cy(),true});tick(55);hardware.setTouch({plus.cx(),plus.cy(),false});tick(5);check(game.player().life==48,"each face keeps hold-to-add-five");
+  auto treasure=game.player().counters[static_cast<unsigned>(mtg::Counter::Treasure)];tap(layout.counters[0].plus);check(game.player().counters[static_cast<unsigned>(mtg::Counter::Treasure)]==treasure+1,"each face keeps first counter increment");tap(layout.counters[0].minus);check(game.player().counters[static_cast<unsigned>(mtg::Counter::Treasure)]==treasure,"each face keeps first counter decrement");
+  tap(layout.counters[1].plus);check(game.player().counters[static_cast<unsigned>(mtg::Counter::Poison)]==1,"each face keeps second counter increment");tap(layout.counters[1].minus);check(game.player().counters[static_cast<unsigned>(mtg::Counter::Poison)]==0,"each face keeps second counter decrement");
+  auto beforeSwitch=game.serialize();multiUI.setFaceDesign(design);tick(15);check(game.serialize()==beforeSwitch,"changing a face does not change any match state");
+  tap(layout.counters[0].icon);check(find(lv_screen_active(),"ENERGY"),"each face opens the counter picker");click("ENERGY");check(game.state().shortcuts[0]==mtg::Counter::Energy,"each face can replace its selected counter");
+  click(LV_SYMBOL_SETTINGS);check(find(lv_screen_active(),"Flip Coin")&&find(lv_screen_active(),"Brightness"),"each face keeps the full gear menu");click("Back");
+  click("P2");check(find(lv_screen_active(),"P2 / CMD"),"each face opens opponent commander damage");click("Back");
+  game.startNewGame(4);multiUI.goHome();tick(15);game.setActionTime(lv_tick_get());game.adjustLife(-1);tick(5);tap(layout.undo);check(game.player().life==40,"each face keeps grouped recent Undo");
+  game.adjustLife(-game.player().life);tick(15);check(find(lv_screen_active(),"\xef\x95\x8c")&&find(lv_screen_active(),"LIFE 0 OR LESS"),"each face keeps the skull and lethal reason");
+  game.startNewGame(4);multiUI.goHome();tick(18);screenshot(("ui-face-"+std::to_string(design)+".bmp").c_str());
+  if(mtg::redesignedFace(design))for(unsigned players:{2u,6u,12u}){game.startNewGame(players,players==12?mtg::GameFormat::TwoHeadedGiant:mtg::GameFormat::Commander);multiUI.goHome();tick(18);check(multiUI.faceControlsFit(),"controls and player tiles must remain complete at every table size");if(players==12){check(find(lv_screen_active(),"P12"),"largest tables keep every opponent accessible");click("P12");check(find(lv_screen_active(),"P12 / CMD"),"last large-table player remains clickable");click("Back");}}
+ }
+ multiUI.setFaceDesign(0);tick(15);
+ // Use the real settings path rather than the studio-only shortcut.
+ game.startNewGame(4);multiUI.goHome();tick(15);auto matchBeforeStyle=game.serialize();
+ click(LV_SYMBOL_SETTINGS);click("Watch Face");check(find(lv_screen_active(),"Original")&&find(lv_screen_active(),"Neon Circuit"),"watch-face menu first page");screenshot("ui-watch-faces.bmp");
+ click("Next");check(find(lv_screen_active(),"Citrus Relay")&&find(lv_screen_active(),"Prism"),"watch-face menu second page");click("Next");check(find(lv_screen_active(),"Ember Forge"),"watch-face menu last page");click("Previous");click("Prism");
+ check(multiUI.faceDesign()==7&&identity.faceDesign()==7&&game.serialize()==matchBeforeStyle,"selecting a face saves preference without changing match or Undo");
+ click(LV_SYMBOL_SETTINGS);click("Brightness");auto savesBeforeBrightness=profileMemory.saves;rotate(-1);rotate(-1);rotate(35-static_cast<int>(hardware.brightness()));check(profileMemory.saves==savesBeforeBrightness,"brightness wheel adjustments do not write at every step");tick(50);check(profileMemory.saves==savesBeforeBrightness+1,"settled brightness is saved exactly once");check(identity.brightness()==35,"brightness persists after adjustment settles");click("Back");click("Back");
+ mtg::DeviceProfile appearanceReboot(&profileMemory);check(appearanceReboot.load()&&appearanceReboot.name()=="ALICE"&&appearanceReboot.faceDesign()==7&&appearanceReboot.brightness()==35,"profile reader restores name, face and brightness together");
+ hardware.setBrightness(100);mtg::AppUI rebootUI(game,hardware,device,random,&appearanceReboot);app=&rebootUI;tick(15);check(rebootUI.faceDesign()==7&&hardware.brightness()==35,"UI startup applies saved face and brightness");rebootUI.goHome();tick(15);check(rebootUI.faceControlsFit(),"restored face builds correctly");
+ click(LV_SYMBOL_SETTINGS);click("Brightness");rotate(-35);click("Back");check(appearanceReboot.brightness()==0,"leaving brightness immediately saves even zero percent");
+ click("Back");auto darkLife=game.player().life;rotate(1);check(hardware.brightness()==10&&game.player().life==darkLife,"clockwise rotation recovers zero brightness without editing life");
  lv_deinit();std::cout<<"All round-screen counter interaction checks passed\n";
 }

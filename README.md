@@ -1,8 +1,8 @@
 # Arcana / MTG Life Counter
 
-**Version 0.15.3** - Windows digital twin, multi-format play and local-network multiplayer.
+**Version 0.16.0** - Eleven selectable watch faces, saved brightness, multi-format play and local-network multiplayer.
 
-A native Windows digital twin of a round 360 x 360 knob display, with a shared LVGL interface designed for eventual ESP32-S3 deployment. The app supports Commander, Classic, Commander 2HG, Brawl and Limited, with in-memory matches and a touch/rotary interface.
+A native Windows digital twin of a round 360 x 360 knob display, with the same LVGL interface running on the ESP32-S3 knob. The app supports Commander, Classic, Commander 2HG, Brawl and Limited, with in-memory matches and a touch/rotary interface.
 
 ![Arcana Commander life-counter watch face](docs/previews/watch-face.png)
 
@@ -21,13 +21,26 @@ The Windows digital twin shares its game logic and LVGL interface with a **Guiti
 | --- | --- | --- | --- |
 | ![Startup](docs/previews/startup.png) | ![Setup](docs/previews/setup.png) | ![Life](docs/previews/watch-face.png) | ![Damage](docs/previews/ui-opponent.png) |
 
+## Watch faces and saved display settings
+
+Open **Gear > Watch Face** during a match. Browse the three radial pages using **Next** and **Previous**, then tap a design to apply it. A check mark identifies the current choice; **Back** returns to settings. Selection preserves life, counters, Undo history and multiplayer state, and remains selected after restart and new games.
+
+The eleven designs are **Original**, **Azure Comet**, **Copper Petal**, **Neon Circuit**, **Citrus Relay**, **Sunset Meridian**, **Verdant**, **Prism**, **Obsidian**, **Magenta Ledger** and **Ember Forge**. Original and Ember Forge retain their approved appearance. The other nine use distinct arrangements; Neon Circuit, Verdant, Prism and Obsidian keep their approved palettes. Citrus Relay has top + / bottom - life regions; the other faces use left - / right +. All include opponent controls, both counter shortcuts, settings, recent Undo, battery and lethal warnings.
+
+![All eleven ARCANA watch faces](docs/previews/watch-faces.png)
+
+**Gear > Brightness** now remembers the selected level after restart. It saves once adjustments have settled for 750 ms, or immediately when leaving the screen. Automatic idle dimming still restores the user's selected level and does not overwrite it. Existing profiles retain their name/identity and start with Original; devices without a saved brightness retain their hardware default. At a saved **0%**, a clockwise turn restores **10%** without changing life.
+
+The Windows Face Studio runs these same firmware renderers. Use the left selector or **[ / ]** to compare designs without resetting the demo match. Run `tools\run_simulator.bat` to open it.
+
 ## Latest UI updates
 
+- Firmware **v0.16.0** adds the six-section gear menu, paged Watch Face selector and persistent display settings. Existing OTA-enabled devices can install it from the startup **Update** button.
 - The name keyboard uses gentle curved rows. Green **OK** is above the name; **CHANGE** is an inset bottom button, and **Back** remains alone in the center.
 - **123/ABC** and **DEL** are positioned above the keys beside Back. CHANGE affects only the draft until OK confirms it.
-- The Multi Arcana main face shows your saved name above the heart. In every mode the **heart/skull is above the gear** and the **battery is below it**.
+- The Multi Arcana main face shows your saved name. Original and Ember Forge keep the **heart/skull above the gear** and the **battery below it**; the other designs place these indicators to suit their layout.
 - Match saving and Continue have been removed. The fade uses a single background-opacity cover, and curved Undo letters are reused between updates.
-- The watch-face, multiplayer and keyboard screenshots reflect these layouts. Hardware checks include interrupted flash-save recovery and idle-dimming/wake-gesture tests; ten suites run in total. The firmware also supports on-demand 30-second performance captures over USB.
+- The watch-face, multiplayer and keyboard screenshots reflect these layouts. Hardware checks include interrupted flash-save recovery and idle-dimming/wake-gesture tests; eleven native suites and eleven host-tool tests pass. The firmware also supports on-demand 30-second performance captures over USB.
 
 ## Build and run on Windows
 
@@ -60,7 +73,7 @@ Startup offers **New Game**, **Update** and **About**. Matches run entirely in m
 5. In Single Arcana, opponent tabs show incoming commander damage in Commander/2HG and the opponent's life in Classic/Brawl/Limited. Their round screens edit the corresponding value; central Back returns to P1. New games restore every tracked life total to the selected preset.
 6. Under **Gear > End Game**, confirm **End game** to finish the match and return to startup. Back cancels. Restarting or closing the application discards the current match.
 
-Life, counters, Undo/Redo history, brightness and live network membership are session-only. Restart Device starts a fresh session at startup. Your multiplayer device name and stable identity remain saved independently.
+Life, counters, Undo/Redo history and live network membership are session-only. Restart Device starts a fresh session at startup. Your multiplayer device name, stable identity, watch face and selected brightness remain saved independently.
 
 ## Device updates and About
 
@@ -163,22 +176,24 @@ The main-face **Undo** reverses the entire group of game edits from the precedin
 
 ### Battery and brightness
 
-The horizontal battery icon sits below the gear, mirrored against the heart above it in every life-face mode. Multi also displays your saved name above the upper heart/skull. The battery displays six bands: **0-5%, 6-20%, 21-40%, 41-60%, 61-80%, 81-100%**, plus charging and unknown states. The simulator uses an illustrative 75% reading; a hardware adapter must provide real telemetry. On the Guition device, the screen dims to 10% after five idle seconds and restores the selected brightness on wake. The wake touch or initial wheel burst is consumed to prevent accidental edits. Selected levels of 10% or less stay unchanged. Battery-runtime improvement has not been measured.
+In Original and Ember Forge, the horizontal battery icon sits below the gear, mirrored against the heart above it; other watch faces arrange these indicators to suit their layout. Multi also displays your saved name above the upper heart/skull. The battery displays six bands: **0-5%, 6-20%, 21-40%, 41-60%, 61-80%, 81-100%**, plus charging and unknown states. The simulator uses an illustrative 75% reading; a hardware adapter must provide real telemetry. On the Guition device, the screen dims to 10% after five idle seconds and restores the selected brightness on wake. The wake touch or initial wheel burst is consumed to prevent accidental edits. Selected levels of 10% or less stay unchanged. Battery-runtime improvement has not been measured.
 
 The physical RGB ring receives a uniform frame covering up to 64 LEDs, including longer ring revisions: **green at 30% battery or above, red below 30%**. Green uses 5/255 channel drive (about 2%); red uses 5/255 (about 2%). Extra pixel data is ignored by shorter chains. It stays off while USB power or an unavailable reading prevents a reliable battery estimate. The ring follows the same approximate battery estimate as the screen. It has no animation, updates only when the selected colour changes, and is independent of screen brightness. The extra battery consumption has not been measured.
 
-**Brightness** is adjustable from **0-100%** by slider, +/- sectors or rotary input. The desktop previews it using display opacity; the Guition adapter drives real backlight PWM. Brightness is session-only. If set to 0%, clockwise encoder input raises it again.
+**Brightness** is adjustable from **0-100%** by slider, +/- sectors or rotary input. The desktop previews it using display opacity; the Guition adapter drives real backlight PWM. Brightness is saved after adjustments settle or when leaving its screen. At 0%, turn clockwise to raise it; outside the brightness screen the first clockwise gesture restores 10% without editing life.
 
 ## Gear menu
 
-The gear sits centrally between the two parts of the white life total, with the red heart above it, the battery below it and no LIFE caption. The life title is omitted; the center divider is green above the gear and red below, matching the corresponding colored inner ring segments. It opens:
+In Original, the gear sits centrally between the two parts of the white life total, with the red heart above it, the battery below it and no LIFE caption. The life title is omitted; the center divider is green above the gear and red below, matching the corresponding colored inner ring segments. The six-section radial menu opens:
 
+- **Watch Face:** browse all eleven designs across three radial pages, with the selected face marked and saved for restart.
+- **Brightness:** adjust and save the display level from 0-100%.
 - **New Game:** asks Yes/No, then opens Single/Multi selection and the chosen setup flow. The current match is replaced only on Confirm; cancelling preserves it.
 - **Flip Coin:** shows a random Heads/Tails result, with Flip again and central Back.
 - **End Game:** confirms whether to finish the match and return to startup.
 - **Roll:** rolls one D20 per player, or per team in 2HG. The highest result starts; only tied high rollers reroll. The screen shows the winner and the final round's rolls, with Roll again and central Back. An exceptionally long unresolved tie offers another roll rather than choosing a biased winner.
 
-**Brightness** opens a percentage/slider section and large minus/plus sectors. A central grey Back on black returns to the life face. The Trackers button has been removed from this menu; the simulator's Tab shortcut still opens advanced trackers. Random tools never change match stats or consume Undo history.
+**Brightness** opens a percentage/slider section and large minus/plus sectors. A central grey Back on black returns one step to settings. The Trackers button has been removed from this menu; the simulator's Tab shortcut still opens advanced trackers. Random tools never change match stats or consume Undo history.
 
 Poison uses the Phyrexian mark, and Energy, Rad and Shield use MTG glyphs sourced through the Mana font. Experience uses the Commander 2015 emblem. Treasure and Storm use original chest/cloud drawings; no unverified official-symbol claim is made. See [symbol sources and licenses](docs/symbols.md).
 
@@ -226,7 +241,7 @@ The right panel provides encoder buttons, logical power, restart and new-game se
 
 ## Tests and scope
 
-`tools\run_tests.bat` runs eleven suites: game rules, in-memory state snapshots, interrupted device-profile storage recovery, idle-backlight policy/timing statistics, firmware release compatibility, multiplayer protocol/profile behavior, real UDP discovery/sync, separate host/client processes, round-screen UI, SDL smoke and fresh startup across separate processes. Coverage includes all five formats; 2-6 teams and all twelve seats; startup update availability/About/contact navigation and cancelled setup; independent opponent life and commander damage; linked-life corrections; poison thresholds; retained counters; snapshot validation; corrupt profile-slot fallback; bounded Undo/Redo and five-second groups; battery bands; curved touch targets; pooled Undo glyphs; single-cover fade timing; persistent device identities; keyboard/host/join flows; duplicate and lost packets; rapid-edit coalescing; simultaneous teammate edits; and host/client discovery between separate processes. Screenshots are generated in `build/ui-*.bmp` and `build/simulator-*.bmp`. The separate `tests/firmware_tools_tests.py` checks that the installer rejects altered, incomplete and wrong-device factory backups without accessing hardware.
+`tools\run_tests.bat` runs eleven suites: game rules, in-memory state snapshots, interrupted device-profile storage recovery, idle-backlight policy/timing statistics, firmware release compatibility, multiplayer protocol/profile behavior, real UDP discovery/sync, separate host/client processes, round-screen UI, SDL smoke and fresh startup across separate processes. Coverage includes all five formats; 2-6 teams and all twelve seats; startup update availability/About/contact navigation and cancelled setup; independent opponent life and commander damage; linked-life corrections; poison thresholds; retained counters; snapshot validation; corrupt profile-slot fallback; bounded Undo/Redo and five-second groups; battery bands; curved touch targets; pooled Undo glyphs; eleven shared watch-face layouts and their real selector; persistent appearance settings, legacy-profile migration and zero-brightness recovery; single-cover fade timing; persistent device identities; keyboard/host/join flows; duplicate and lost packets; rapid-edit coalescing; simultaneous teammate edits; and host/client discovery between separate processes. Screenshots are generated in `build/ui-*.bmp` and `build/simulator-*.bmp`. The separate `tests/firmware_tools_tests.py` checks that the installer rejects altered, incomplete and wrong-device factory backups without accessing hardware.
 
 Commander tabs track incoming damage. Classic, Brawl and Limited tabs track opponents' life. Commander 2HG shares life and poison within your team while keeping incoming commander damage separate by recipient. Desktop side panels are simulator controls; device screens use the same LVGL code. The separate firmware target and current physical validation boundary are documented in [firmware/README.md](firmware/README.md).
 
