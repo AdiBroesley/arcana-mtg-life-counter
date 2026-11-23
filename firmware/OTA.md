@@ -39,14 +39,14 @@ Offline, connection failures, no release, or an incompatible release leave Updat
 Keep `src/core/AppInfo.hpp`, the top-level CMake project and `firmware/CMakeLists.txt` on the same numeric version. Build and test, then run:
 
 ```powershell
-.\.tools\esp-python\Scripts\python.exe tools/package_firmware.py --tag v0.16.0
+.\.tools\esp-python\Scripts\python.exe tools/package_firmware.py --tag v0.16.1
 ```
 
 Packaging checks the built image's project, embedded version and size, then creates `build/release-assets/arcana-jc3636k718.bin`, a JSON description and `SHA256SUMS`. The binary filename is part of the model compatibility contract. GitHub supplies its asset digest; the device requires `sha256:` followed by 64 lowercase hex digits.
 
 The included GitHub Actions workflow builds a version tag or an explicitly selected existing tag, uploads reviewable artifacts and prepares a **draft** release. Review the build and release before publishing. Devices ignore drafts and prereleases, and compare the latest stable release numerically against the installed version. Never put Wi-Fi passwords or GitHub credentials in the firmware/repository.
 
-## Version 0.16.0
+## Version 0.16.1
 
 This release includes all eleven approved watch faces on the physical knob. **Gear > Watch Face** opens a paged radial selector; the selected face and the chosen **Gear > Brightness** level survive restart. Older profiles migrate without losing the multiplayer name, stable identity or Wi-Fi setup. Match saving remains disabled.
 

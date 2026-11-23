@@ -247,9 +247,8 @@ void AppUI::partialDividers() {
  arc(screen_,diameter,(360-diameter)/2,320,336,violet,stroke);
  arc(screen_,diameter,(360-diameter)/2,38,142,violet,stroke);
  // Derive both ends from the circle intersections, so the joins touch exactly.
- static const auto turns=[] {
+ static const auto turns=[](double radius) {
   std::array<std::array<lv_point_precise_t,2>,4> paths{};
-  constexpr double radius=diameter/2.0-stroke/2.0;
   unsigned index=0;
   for(unsigned angle:{204u,38u}) {
    int y=static_cast<int>(std::round(180+radius*std::sin(angle*3.141592653589793/180)));
@@ -259,7 +258,7 @@ void AppUI::partialDividers() {
    paths[index++]={lv_point_precise_t{360-innerX,y},lv_point_precise_t{360-outerX,y}};
   }
   return paths;
- }();
+ }(diameter/2.0-stroke/2.0);
  for(const auto& points:turns) {
   auto* line=lv_line_create(screen_);lv_line_set_points(line,points.data(),2);
   lv_obj_set_style_line_color(line,lv_color_hex(violet),0);lv_obj_set_style_line_width(line,2,0);

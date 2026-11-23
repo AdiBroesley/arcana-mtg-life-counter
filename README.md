@@ -1,6 +1,6 @@
 # Arcana / MTG Life Counter
 
-**Version 0.16.0** - Eleven selectable watch faces, saved brightness, multi-format play and local-network multiplayer.
+**Version 0.16.1** - Eleven selectable watch faces, saved brightness, multi-format play and local-network multiplayer.
 
 A native Windows digital twin of a round 360 x 360 knob display, with the same LVGL interface running on the ESP32-S3 knob. The app supports Commander, Classic, Commander 2HG, Brawl and Limited, with in-memory matches and a touch/rotary interface.
 
@@ -35,7 +35,7 @@ The Windows Face Studio runs these same firmware renderers. Use the left selecto
 
 ## Latest UI updates
 
-- Firmware **v0.16.0** adds the six-section gear menu, paged Watch Face selector and persistent display settings. Existing OTA-enabled devices can install it from the startup **Update** button.
+- Firmware **v0.16.1** adds the six-section gear menu, paged Watch Face selector and persistent display settings. Existing OTA-enabled devices can install it from the startup **Update** button.
 - The name keyboard uses gentle curved rows. Green **OK** is above the name; **CHANGE** is an inset bottom button, and **Back** remains alone in the center.
 - **123/ABC** and **DEL** are positioned above the keys beside Back. CHANGE affects only the draft until OK confirms it.
 - The Multi Arcana main face shows your saved name. Original and Ember Forge keep the **heart/skull above the gear** and the **battery below it**; the other designs place these indicators to suit their layout.
