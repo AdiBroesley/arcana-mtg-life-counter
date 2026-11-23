@@ -19,7 +19,7 @@ struct FaceLayout {
   int half=life.w/2;return {{{life.x,life.y,half,life.h},{life.x+half,life.y,life.w-half,life.h}}};
  }
 };
-inline bool redesignedFace(unsigned id){return id>0&&id<10;}
+inline bool redesignedFace(unsigned id){return (id>0&&id<10)||id==11;}
 inline FaceCounterLayout counterBar(int x,int y,int w,int h){
  int step=w>=112?28:26;return {{x,y,step,h},{x+step+2,y,w-2*step-4,h},{x+w-step,y,step,h}};
 }
@@ -60,6 +60,9 @@ inline FaceLayout faceLayout(unsigned id,unsigned opponents=3){
   case 9:
    p.life={112,106,152,140};p.value={112,110,76,84};p.rightValue={188,154,76,84};p.heart={160,238,32,32};p.battery={274,252,28,14};p.gear={86,278,40,40};p.undo={166,292,96,30};p.status={132,272,152,18};p.format=FaceNumberFormat::Split;p.numberScale=1.25;
    p.counters={counterRail(38,110,58,116),counterRail(272,132,54,112)};break;
+  case 11:
+   p.life={82,143,196,84};p.value={95,145,170,79};p.heart={78,94,32,32};p.battery={250,105,28,14};p.gear={163,88,34,34};p.undo={134,314,92,28};p.status={111,229,138,14};p.name={108,125,144,12};p.playersY=36;p.numberScale=1.4;
+   p.counters={counterBar(54,246,116,37),counterBar(190,246,116,37)};break;
   default:
    p.life={72,82,216,216};p.value={94,161,68,58};p.rightValue={198,161,68,58};p.heart={162,120,36,37};p.battery={166,235,28,14};p.gear={158,168,44,44};p.undo={145,310,70,28};p.status={95,260,170,34};p.format=FaceNumberFormat::Split;
    p.counters={FaceCounterLayout{{24,245,40,30},{13,173,44,44},{24,129,40,36}},FaceCounterLayout{{302,245,40,30},{303,173,44,44},{302,129,40,36}}};break;
@@ -72,6 +75,7 @@ inline FaceLayout faceLayout(unsigned id,unsigned opponents=3){
   case 7:p.name={112,137,136,12};break;
   case 8:p.name={106,122,148,12};break;
   case 9:p.name={110,88,146,12};break;
+  case 11:p.gear={163,90,34,34};break;
  }
  return p;
 }

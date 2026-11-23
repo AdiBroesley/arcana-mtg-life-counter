@@ -29,7 +29,7 @@ mtg::Multiplayer* network;
 lv_obj_t* logLabel;
 lv_obj_t* device;
 std::vector<uint32_t> pixels(W*H);
-std::array<lv_obj_t*,11> designButtons{};
+std::array<lv_obj_t*,mtg::faceDesignCount> designButtons{};
 std::array<lv_obj_t*,6> swatches{};
 lv_obj_t* designName=nullptr;lv_obj_t* designDescription=nullptr;
 lv_obj_t* lifeHelp=nullptr;
@@ -79,7 +79,7 @@ void event(lv_event_t* e) {
  if(action==2) { hardware.togglePower(); lv_obj_set_style_opa(device,hardware.powered()?255:0,0); lv_label_set_text(logLabel,hardware.powered()?"Power: on":"Power: off"); }
  if(action==3 && hardware.powered()) { app->requestNewGame(); lv_label_set_text(logLabel,"New game setup"); }
  if(action==4) { network->leave();game=mtg::GameState{};hardware.setTouch({});app->showStartup(); if(!hardware.powered()) hardware.togglePower(); lv_obj_set_style_opa(device,255,0); lv_label_set_text(logLabel,"Restart: new session"); }
- if(action>=100&&action<111)chooseDesign(static_cast<unsigned>(action-100));
+ if(action>=100&&action<100+mtg::faceDesignCount)chooseDesign(static_cast<unsigned>(action-100));
  app->update();
 }
 void button(lv_obj_t* parent,const char* value,int x,int y,intptr_t action) {
@@ -98,7 +98,7 @@ int main(int argc,char** argv) {
   else if(arg=="--face-studio"){}
   else if(arg=="--face-design"&&i+1<argc){try{initialDesign=static_cast<unsigned>(std::stoul(argv[++i]));}catch(...){return 2;}if(initialDesign>=mtg::faceDesigns.size())return 2;}
   else if(arg=="--export-faces"&&i+1<argc)exportDirectory=argv[++i];
-  else {std::cerr<<"Usage: mtg_simulator [--face-studio] [--face-design 0..10] [--export-faces directory] [--smoke-test | --startup-test] [--profile-file path]\n";return 2;}
+  else {std::cerr<<"Usage: mtg_simulator [--face-studio] [--face-design 0..11] [--export-faces directory] [--smoke-test | --startup-test] [--profile-file path]\n";return 2;}
  }
  const bool studio=!smoke;if(studio){W=1240;H=760;pixels.assign(W*H,0);}
  SDL_SetMainReady();
@@ -144,10 +144,10 @@ int main(int argc,char** argv) {
  mtg::SimulatorRandom random;mtg::AppUI ui(game,hardware,device,random,&profile,&multiplayer);app=&ui;if(initialDesign>=mtg::faceDesignCount)initialDesign=ui.faceDesign();
  lv_obj_t* stats=nullptr;
  if(studio){
-  text(root,"ARCANA / FACE STUDIO",24,25,0xe7f1f4);text(root,"Eleven shared watch faces. Select on the knob in Gear > Watch Face.",24,55,0x81a5b7);
+  text(root,"ARCANA / FACE STUDIO",24,25,0xe7f1f4);text(root,"Twelve shared watch faces. Choose your design in Gear > Watch Face.",24,55,0x81a5b7);
   card(24,101,258,537);text(root,"CHOOSE A FACE",42,116,0x81a5b7);
   for(unsigned i=0;i<mtg::faceDesigns.size();++i){
-   auto* b=lv_button_create(root);designButtons[i]=b;lv_obj_set_pos(b,36,143+i*43);lv_obj_set_size(b,234,37);lv_obj_set_style_radius(b,9,0);lv_obj_set_style_border_width(b,1,0);lv_obj_set_style_shadow_width(b,0,0);
+   auto* b=lv_button_create(root);designButtons[i]=b;lv_obj_set_pos(b,36,143+i*40);lv_obj_set_size(b,234,35);lv_obj_set_style_radius(b,9,0);lv_obj_set_style_border_width(b,1,0);lv_obj_set_style_shadow_width(b,0,0);
    auto* chip=lv_obj_create(b);lv_obj_set_pos(chip,0,0);lv_obj_set_size(chip,5,20);lv_obj_set_style_bg_color(chip,lv_color_hex(mtg::faceDesigns[i].accent),0);lv_obj_set_style_border_width(chip,0,0);lv_obj_set_style_radius(chip,2,0);lv_obj_set_style_pad_all(chip,0,0);lv_obj_remove_flag(chip,LV_OBJ_FLAG_CLICKABLE);lv_obj_remove_flag(chip,LV_OBJ_FLAG_SCROLLABLE);
    auto* caption=lv_label_create(b);auto name=(i<10?"0":"")+std::to_string(i)+"  "+mtg::faceDesigns[i].name;lv_label_set_text(caption,name.c_str());lv_obj_set_pos(caption,17,1);lv_obj_set_style_text_color(caption,lv_color_hex(0xe0edf1),0);
    lv_obj_add_event_cb(b,event,LV_EVENT_CLICKED,reinterpret_cast<void*>(static_cast<intptr_t>(100+i)));

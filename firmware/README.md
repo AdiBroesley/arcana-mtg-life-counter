@@ -4,9 +4,11 @@ This ESP-IDF build uses the existing ARCANA game engine and LVGL 9.2.2 interface
 
 The first hardware installation requires a complete, verified factory flash backup. Build success alone does not establish that display orientation, touch or rotation work on a physical unit.
 
-## Watch faces and brightness (v0.16.2)
+## Watch faces and brightness (v0.16.3)
 
-The firmware now compiles the same eleven watch-face renderers as the desktop. **Gear > Watch Face** browses three radial pages; selection changes only local presentation and is saved independently of gameplay. **Gear > Brightness** saves after 750 ms without another adjustment, or on leaving the screen. Device-profile storage retains its existing address and alternating checksum slots. Legacy profiles preserve their identity and existing hardware brightness default. Saved 0% brightness can be recovered with a clockwise gesture, restoring 10% without editing life.
+The firmware now compiles the same twelve watch-face renderers as the desktop. **Gear > Watch Face** browses three radial pages; selection changes only local presentation and is saved independently of gameplay. **Gear > Brightness** saves after 750 ms without another adjustment, or on leaving the screen. Device-profile storage retains its existing address and alternating checksum slots. Legacy profiles preserve their identity and existing hardware brightness default. Saved 0% brightness can be recovered with a clockwise gesture, restoring 10% without editing life.
+
+Mana Confluence adds a five-mana-colour rim, a small separate Mana font subset, bronze and ivory controls, and static stained-glass panes. All other face previews remain pixel-identical.
 
 No game autosaving has been reintroduced. These additions build for the existing OTA slots; see [wireless installation](OTA.md). New face performance and the settings flow require an on-device check after installation.
 

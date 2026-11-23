@@ -83,6 +83,6 @@ void AppUI::buildTools() {
   radialSector("Roll again",count-1,count,RollD20,0,violet,ToolIcon::Reset);
  }
  radialBack();
- if(view_==View::FaceSelect)label(screen_,std::to_string(facePage_+1)+" / 3",151,195,58,&tab_font,0xaaaaaa);
+ if(view_==View::FaceSelect)label(screen_,std::to_string(facePage_+1)+" / "+std::to_string((faceDesigns.size()+3)/4),151,195,58,&tab_font,0xaaaaaa);
 }
 }

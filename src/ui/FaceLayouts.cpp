@@ -8,7 +8,22 @@
 namespace mtg {
 using namespace widgets;
 namespace {
+constexpr std::array<unsigned,5> manaColors{{0xeee2be,0x70aed2,0xa493a8,0xd97658,0x80a98a}};
+constexpr std::array<const char*,5> manaGlyphs{{"\xee\x98\x80","\xee\x98\x81","\xee\x98\x82","\xee\x98\x83","\xee\x98\x84"}};
 unsigned tint(unsigned a,unsigned b,double amount){unsigned result=0;for(unsigned shift:{0u,8u,16u})result|=static_cast<unsigned>(std::lround(((a>>shift)&255)*(1-amount)+((b>>shift)&255)*amount))<<shift;return result;}
+void drawManaGlass(lv_event_t* event){
+ auto* object=lv_event_get_target_obj(event);lv_area_t area;lv_obj_get_coords(object,&area);auto* layer=lv_event_get_layer(event);
+ // Inset octagonal panes stay inside the bronze frame without a masking layer.
+ constexpr std::array<lv_point_t,8> edge{{{17,4},{186,4},{199,17},{199,73},{186,86},{17,86},{4,73},{4,17}}};
+ constexpr std::array<unsigned,8> colors{{0,1,1,2,2,3,3,4}};
+ lv_draw_triangle_dsc_t pane;lv_draw_triangle_dsc_init(&pane);pane.bg_opa=LV_OPA_COVER;
+ for(unsigned i=0;i<edge.size();++i){
+  auto a=edge[i],b=edge[(i+1)%edge.size()];pane.p[0]={area.x1+102,area.y1+45};pane.p[1]={area.x1+a.x,area.y1+a.y};pane.p[2]={area.x1+b.x,area.y1+b.y};
+  pane.bg_color=lv_color_hex(tint(0x242019,manaColors[colors[i]],.13));lv_draw_triangle(layer,&pane);
+ }
+ lv_draw_line_dsc_t lead;lv_draw_line_dsc_init(&lead);lead.color=lv_color_hex(0x66583e);lead.width=1;lead.opa=LV_OPA_40;
+ for(unsigned i:{0u,1u,3u,5u,7u}){lead.p1={area.x1+102,area.y1+45};lead.p2={area.x1+edge[i].x,area.y1+edge[i].y};lv_draw_line(layer,&lead);}
+}
 void fitText(lv_obj_t* obj,const std::string& text,FaceRect r,const lv_font_t* font,unsigned color,double maximum=1){
  if(text==lv_label_get_text(obj)&&lv_obj_get_style_text_font(obj,0)==font&&lv_color_eq(lv_obj_get_style_text_color(obj,0),lv_color_hex(color)))return;
  lv_label_set_text(obj,text.c_str());textFont(obj,font);textColor(obj,lv_color_hex(color));
@@ -48,7 +63,7 @@ void AppUI::buildFaceLayout(){
  auto line=[&](int x1,int y1,int x2,int y2,unsigned color,int width=1){tabEdgePoints_.push_back({lv_point_precise_t{x1,y1},lv_point_precise_t{x2,y2}});auto* o=lv_line_create(art);lv_line_set_points(o,tabEdgePoints_.back().data(),2);lv_obj_set_style_line_color(o,lv_color_hex(color),0);lv_obj_set_style_line_width(o,width,0);lv_obj_set_style_line_rounded(o,true,0);lv_obj_remove_flag(o,LV_OBJ_FLAG_CLICKABLE);};
  auto arc=[&](int cx,int cy,int diameter,unsigned start,unsigned end,unsigned color,int width=1){auto* o=lv_arc_create(art);lv_obj_set_size(o,diameter,diameter);lv_obj_set_pos(o,cx-diameter/2,cy-diameter/2);lv_obj_remove_style(o,nullptr,LV_PART_KNOB);lv_obj_set_style_arc_opa(o,0,LV_PART_INDICATOR);lv_obj_set_style_arc_color(o,lv_color_hex(color),LV_PART_MAIN);lv_obj_set_style_arc_width(o,width,LV_PART_MAIN);lv_obj_set_style_arc_rounded(o,false,LV_PART_MAIN);lv_arc_set_bg_angles(o,start,end);lv_obj_remove_flag(o,LV_OBJ_FLAG_CLICKABLE);};
  unsigned faint=tint(p.background,p.accent,.22);
- if(id!=8)arc(180,180,344,0,360,faint,id==3?2:1);
+ if(id!=8&&id!=11)arc(180,180,344,0,360,faint,id==3?2:1);
  switch(id){
   case 1:
    arc(186,174,320,120,235,p.accent,2);arc(186,174,306,125,230,faint);
@@ -77,10 +92,34 @@ void AppUI::buildFaceLayout(){
   case 9:
    for(unsigned side=0;side<2;++side){auto r=side?l.rightValue:l.value;auto* card=rect(r,tint(p.surface,side?p.secondary:p.accent,.14),10);lv_obj_set_style_border_color(card,lv_color_hex(side?p.secondary:p.accent),0);lv_obj_set_style_border_width(card,1,0);}
    line(104,106,104,246,p.accent);break;
+  case 11: {
+   // Five quiet mana bands and bronze inlay, drawn once rather than animated.
+   arc(180,180,344,0,360,tint(p.background,p.accent,.30),1);
+   arc(180,180,330,0,360,tint(p.background,p.accent,.48),1);
+   for(unsigned i=0;i<manaColors.size();++i){
+    unsigned start=(236+i*72)%360,end=(start+64)%360;
+    arc(180,180,342,start,end,manaColors[i],4);
+    double theta=(232+i*72)*3.141592653589793/180;
+    int x=180+166*std::cos(theta),y=180+166*std::sin(theta);
+    rect({x-2,y-2,4,4},p.accent,LV_RADIUS_CIRCLE);
+   }
+   arc(180,105,66,162,18,tint(p.surface,p.accent,.42),1);
+   arc(180,105,78,218,322,tint(p.background,p.accent,.28),1);
+   auto* plate=rect({78,139,204,91},tint(p.surface,p.accent,.09),17);
+   lv_obj_set_style_border_width(plate,1,0);lv_obj_set_style_border_color(plate,lv_color_hex(tint(p.surface,p.accent,.72)),0);
+   lv_obj_add_event_cb(plate,drawManaGlass,LV_EVENT_DRAW_MAIN,nullptr);
+   for(int x:{71,289}){line(x,158,x,211,p.accent);line(x,158,x+(x<180?5:-5),153,p.accent);line(x,211,x+(x<180?5:-5),216,p.accent);}
+   // Printed mana pips use the project's licensed Mana font, in W/U/B/R/G order.
+   for(unsigned i=0;i<manaGlyphs.size();++i){
+    auto* pip=rect({113+static_cast<int>(i)*28,285,22,22},manaColors[i],LV_RADIUS_CIRCLE);
+    auto* symbol=label(pip,manaGlyphs[i],0,0,22,&mana_pips,0x181713);lv_obj_center(symbol);
+   }
+   break;
+  }
  }
  auto targets=l.lifeTargets();
  for(unsigned sign=0;sign<2;++sign){auto r=targets[sign];auto* half=box(screen_,r.x,r.y,r.w,r.h,tint(p.surface,sign?p.gain:p.loss,id==8?.015:id==3?.05:.09));
-  lv_obj_set_style_radius(half,id==3?5:id==4?20:14,0);if(id==7||id==9||id==8)lv_obj_set_style_bg_opa(half,0,0);
+  lv_obj_set_style_radius(half,id==3?5:id==4?20:14,0);if(id==7||id==9||id==8||id==11)lv_obj_set_style_bg_opa(half,0,0);
   bindings_.push_back({this,sign?Plus:Minus,sign});lv_obj_add_event_cb(half,lifeTouch,LV_EVENT_ALL,&bindings_.back());layoutLifeTargets_[sign]=half;layoutControls_.push_back(half);
  }
  auto action=[&](FaceRect r,const std::string& title,Action a,unsigned arg,unsigned accent,bool round=false){
@@ -103,6 +142,8 @@ void AppUI::buildFaceLayout(){
  battery_=box(screen_,l.battery.x,l.battery.y,28,14,p.surface);lv_obj_set_style_bg_opa(battery_,0,0);lv_obj_remove_flag(battery_,LV_OBJ_FLAG_CLICKABLE);
  status_=label(screen_,"",l.status.x,l.status.y,l.status.w,&tab_font,p.ink);lv_obj_set_height(status_,12);lv_label_set_long_mode(status_,LV_LABEL_LONG_DOT);lv_obj_set_y(status_,l.status.cy()-6);
  if(networkFace())label(screen_,profile_->name(),l.name.x,l.name.y,l.name.w,&tab_font,p.ink);
+ else if(id==11)label(screen_,"YOUR LIFE",l.name.x,l.name.y,l.name.w,&tab_font,p.muted);
+ if(id==11){label(screen_,"-",86,177,20,&lv_font_montserrat_14,p.loss);label(screen_,"+",254,177,20,&lv_font_montserrat_14,p.gain);}
  if(l.vertical){label(screen_,"+",l.life.x+l.life.w-24,l.life.y+7,16,&lv_font_montserrat_14,p.gain);label(screen_,"-",l.life.x+l.life.w-24,l.life.y+l.life.h-22,16,&lv_font_montserrat_14,p.loss);}
  // Large tables use two complete rows, rather than overlapping top controls.
  unsigned drawn=0,rows=opponents>5?2:1;
@@ -111,6 +152,7 @@ void AppUI::buildFaceLayout(){
   int w=std::min(76,(available-static_cast<int>(count-1)*gap)/static_cast<int>(count)),start=180-(w*count+(count-1)*gap)/2;
   for(unsigned i=0;i<count;++i,++drawn){unsigned owner=first+drawn;FaceRect r{start+static_cast<int>(i)*(w+gap),y,w,h};auto* b=action(r,"",SelectPlayer,owner,p.accent);lv_obj_clean(b);
    lv_obj_set_style_bg_color(b,lv_color_hex(tint(p.surface,drawn%2?p.secondary:p.accent,.37)),0);
+   if(id==11){auto color=manaColors[(drawn+1)%manaColors.size()];lv_obj_set_style_bg_color(b,lv_color_hex(tint(p.surface,color,.24)),0);lv_obj_set_style_border_color(b,lv_color_hex(tint(p.surface,color,.68)),0);}
    auto name=networkFace()?multiplayer_->opponents()[drawn].name:"P"+std::to_string(owner);
    auto* n=label(b,name,3,2,w-6,&tab_font,p.ink);lv_label_set_long_mode(n,LV_LABEL_LONG_DOT);
    const auto* font=rows==1?&lv_font_montserrat_14:&tab_font;
@@ -123,7 +165,13 @@ void AppUI::refreshFaceLayout(){
  auto number=std::to_string(game_.player().life);
  if(l.format==FaceNumberFormat::Padded){if(game_.player().life>=0)while(number.size()<3)number="0"+number;else if(number.size()<3)number.insert(1,"0");}
  if(l.format==FaceNumberFormat::Split){if(game_.player().life>=0&&number.size()<2)number="0"+number;auto split=(number.size()+1)/2;fitText(value_,number.substr(0,split),l.value,&life_digits,p.ink,l.numberScale);fitText(lifeRight_,number.substr(split),l.rightValue,&life_digits,p.ink,l.numberScale);}
- else fitText(value_,number,l.value,&life_digits,p.ink,l.numberScale);
+ else if(faceDesign_==11){
+  // Use native bitmap sizes: clipped resampling can otherwise leave edge pixels.
+  const lv_font_t* font=&tab_font;
+  for(const auto* candidate:{&mana_life_digits,&life_digits,&lv_font_montserrat_48,&lv_font_montserrat_32,&lv_font_montserrat_20,&lv_font_montserrat_14,&tab_font})
+   if(candidate->line_height<=l.value.h-2&&lv_text_get_width(number.c_str(),static_cast<uint32_t>(number.size()),candidate,0)<=l.value.w-6){font=candidate;break;}
+  fitText(value_,number,l.value,font,p.ink,1);
+ }else fitText(value_,number,l.value,&life_digits,p.ink,l.numberScale);
  bool noLife=game_.player().life<=0,poison=game_.poisonWarning(),commander=game_.commanderWarning(),lethal=noLife||poison||commander;
  std::string reason;if(noLife)reason="LIFE 0 OR LESS";if(poison)reason=reason.empty()?"POISON LIMIT":"LIFE / POISON";if(commander)reason=reason.empty()?"21 CMD DAMAGE":noLife&&poison?"LIFE / POISON / CMD":noLife?"LIFE / CMD":"POISON / CMD";
  if(!lethal&&game_.player().monarch)reason="MONARCH";if(!lethal&&networkFace()&&!multiplayer_->error().empty())reason="NETWORK ISSUE";

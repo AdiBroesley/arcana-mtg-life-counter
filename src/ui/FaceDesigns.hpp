@@ -18,6 +18,7 @@ inline constexpr std::array<FaceDesign,faceDesignCount> faceDesigns{{
  {"Prism","Split flip-card digits with both counters above the life display.",0x120f26,0x201c39,0xba9bff,0x68d7e8,0x8ee6d5,0xf493cf,0xf3edff,0xa09bbc},
  {"Obsidian","Oversized typography, Undo above and settings at the bottom.",0x090b0d,0x101316,0xe2e7e9,0xe5ad62,0xc7d1d2,0xe4a293,0xf4f6f6,0x7c898f},
  {"Magenta Ledger","Staggered digits and offset rails in pink and sky blue.",0x140e22,0x25182f,0xff8bd0,0x79bcef,0x83e6bd,0xf4b071,0xfff1fb,0xb29dbb},
- {"Ember Forge","Copper hardware, rivets and a bold instrument bezel.",0x171413,0x262320,0xf2a05f,0x8b9da1,0xe5bd70,0xec8070,0xf6e9d7,0xb3a492}
+ {"Ember Forge","Copper hardware, rivets and a bold instrument bezel.",0x171413,0x262320,0xf2a05f,0x8b9da1,0xe5bd70,0xec8070,0xf6e9d7,0xb3a492},
+ {"Mana Confluence","Ivory, bronze and the five mana colours around a spell-circle dial.",0x15130f,0x242019,0xc8aa73,0x79b4d2,0x83b78e,0xd97760,0xf4ead5,0xa59a86}
 }};
 }

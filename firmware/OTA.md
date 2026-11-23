@@ -39,12 +39,18 @@ Offline, connection failures, no release, or an incompatible release leave Updat
 Keep `src/core/AppInfo.hpp`, the top-level CMake project and `firmware/CMakeLists.txt` on the same numeric version. Build and test, then run:
 
 ```powershell
-.\.tools\esp-python\Scripts\python.exe tools/package_firmware.py --tag v0.16.2
+.\.tools\esp-python\Scripts\python.exe tools/package_firmware.py --tag v0.16.3
 ```
 
 Packaging checks the built image's project, embedded version and size, then creates `build/release-assets/arcana-jc3636k718.bin`, a JSON description and `SHA256SUMS`. The binary filename is part of the model compatibility contract. GitHub supplies its asset digest; the device requires `sha256:` followed by 64 lowercase hex digits.
 
 The included GitHub Actions workflow builds a version tag or an explicitly selected existing tag, uploads reviewable artifacts and prepares a **draft** release. Review the build and release before publishing. Devices ignore drafts and prereleases, and compare the latest stable release numerically against the installed version. Never put Wi-Fi passwords or GitHub credentials in the firmware/repository.
+
+## Version 0.16.3
+
+Adds **Mana Confluence**, the twelfth watch face, to **Gear > Watch Face**. Its bronze and ivory layout includes the five W/U/B/R/G mana glyphs, static stained-glass artwork, life tap/hold, rotary input, both counters, opponent tiles, Undo, battery and lethal warnings. The original eleven designs remain unchanged. The existing three-page selector and saved face/brightness settings continue to work.
+
+This is a normal application-only OTA update for the existing `arcana-ota-v1` layout. No partition migration or USB reinstallation is required on an OTA-enabled knob. The USB installer also uses the newly built application image. Physical rendering performance of the new face still requires an owner-device check after installation.
 
 ## Version 0.16.2
 

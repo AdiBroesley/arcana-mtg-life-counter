@@ -53,7 +53,7 @@ void read(lv_indev_t*,lv_indev_data_t* data) {
  auto t=hardware.touch();data->point.x=t.x;data->point.y=t.y;data->state=t.pressed?LV_INDEV_STATE_PRESSED:LV_INDEV_STATE_RELEASED;
 }
 void tick(int times=4) {for(int i=0;i<times;++i){app->update();lv_tick_inc(20);lv_timer_handler();}}
-void checkFullRedrawMatches(const std::string& description){
+void checkFullRedrawMatches(const std::string& description,int uniformTolerance=0){
  auto incremental=pixels;lv_obj_invalidate(lv_screen_active());tick();
  if(pixels==incremental)return;
  unsigned count=0;int minX=360,minY=360,maxX=0,maxY=0,maxDifference=0;bool centerMatches=true;
@@ -61,7 +61,9 @@ void checkFullRedrawMatches(const std::string& description){
  // LVGL's rotated tab/Undo glyph edges can round differently with a different
  // clipping rectangle (13 pixels in the reference capture). Keep central life,
  // battery and warning pixels exact to one level, and bound edge variation.
- bool matches=centerMatches&&count<=64&&maxDifference<=24;
+ // Scaled text can round differently across clipped ARGB layers. A uniform
+ // tolerance still rejects stale pixels anywhere in the complete face.
+ bool matches=uniformTolerance>0?maxDifference<=uniformTolerance:centerMatches&&count<=64&&maxDifference<=24;
  if(!matches){
   std::cout<<"Pixel differences: "<<count<<" bounds "<<minX<<','<<minY<<" - "<<maxX<<','<<maxY<<" max channel "<<maxDifference<<'\n';
  }
@@ -376,13 +378,17 @@ int main() {
   game.startNewGame(4);multiUI.goHome();tick(15);game.setActionTime(lv_tick_get());game.adjustLife(-1);tick(5);tap(layout.undo);check(game.player().life==40,"each face keeps grouped recent Undo");
   game.adjustLife(-game.player().life);tick(15);check(find(lv_screen_active(),"\xef\x95\x8c")&&find(lv_screen_active(),"LIFE 0 OR LESS"),"each face keeps the skull and lethal reason");
   game.startNewGame(4);multiUI.goHome();tick(18);screenshot(("ui-face-"+std::to_string(design)+".bmp").c_str());
+  if(design==11){
+   for(int target:{41,39,100,9,0,40}){game.setActionTime(lv_tick_get());game.adjustLife(target-game.player().life);tick(20);checkFullRedrawMatches("mana stained-glass life "+std::to_string(target),3);}
+   tick(270);checkFullRedrawMatches("mana Undo expiry",3);auto idleFrames=flushCount;tick(50);check(flushCount==idleFrames,"mana artwork must not animate or redraw while idle");
+  }
   if(mtg::redesignedFace(design))for(unsigned players:{2u,6u,12u}){game.startNewGame(players,players==12?mtg::GameFormat::TwoHeadedGiant:mtg::GameFormat::Commander);multiUI.goHome();tick(18);check(multiUI.faceControlsFit(),"controls and player tiles must remain complete at every table size");if(players==12){check(find(lv_screen_active(),"P12"),"largest tables keep every opponent accessible");click("P12");check(find(lv_screen_active(),"P12 / CMD"),"last large-table player remains clickable");click("Back");}}
  }
  multiUI.setFaceDesign(0);tick(15);
  // Use the real settings path rather than the studio-only shortcut.
  game.startNewGame(4);multiUI.goHome();tick(15);auto matchBeforeStyle=game.serialize();
  click(LV_SYMBOL_SETTINGS);click("Watch Face");check(find(lv_screen_active(),"Original")&&find(lv_screen_active(),"Neon Circuit"),"watch-face menu first page");screenshot("ui-watch-faces.bmp");
- click("Next");check(find(lv_screen_active(),"Citrus Relay")&&find(lv_screen_active(),"Prism"),"watch-face menu second page");click("Next");check(find(lv_screen_active(),"Ember Forge"),"watch-face menu last page");click("Previous");click("Prism");
+ click("Next");check(find(lv_screen_active(),"Citrus Relay")&&find(lv_screen_active(),"Prism"),"watch-face menu second page");click("Next");check(find(lv_screen_active(),"Ember Forge"),"watch-face menu last page");check(find(lv_screen_active(),"Mana Confluence"),"new mana face appears on the existing third page");click("Mana Confluence");check(multiUI.faceDesign()==11&&game.serialize()==matchBeforeStyle,"mana face can be selected without changing the match");click(LV_SYMBOL_SETTINGS);click("Watch Face");click("Previous");click("Prism");
  check(multiUI.faceDesign()==7&&identity.faceDesign()==7&&game.serialize()==matchBeforeStyle,"selecting a face saves preference without changing match or Undo");
  click(LV_SYMBOL_SETTINGS);click("Brightness");auto savesBeforeBrightness=profileMemory.saves;rotate(-1);rotate(-1);rotate(35-static_cast<int>(hardware.brightness()));check(profileMemory.saves==savesBeforeBrightness,"brightness wheel adjustments do not write at every step");tick(50);check(profileMemory.saves==savesBeforeBrightness+1,"settled brightness is saved exactly once");check(identity.brightness()==35,"brightness persists after adjustment settles");click("Back");click("Back");
  mtg::DeviceProfile appearanceReboot(&profileMemory);check(appearanceReboot.load()&&appearanceReboot.name()=="ALICE"&&appearanceReboot.faceDesign()==7&&appearanceReboot.brightness()==35,"profile reader restores name, face and brightness together");

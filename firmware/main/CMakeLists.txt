@@ -15,6 +15,8 @@ idf_component_register(
   "${APP_ROOT}/src/ui/Widgets/ToolIcons.cpp"
   "${APP_ROOT}/src/assets/life_digits.c"
   "${APP_ROOT}/src/assets/mtg_symbols.c"
+  "${APP_ROOT}/src/assets/mana_pips.c"
+  "${APP_ROOT}/src/assets/mana_life_digits.c"
   "${APP_ROOT}/src/assets/heart_symbol.c"
   "${APP_ROOT}/src/assets/tab_font.c"
   "${APP_ROOT}/simulator/LanTransport.cpp"

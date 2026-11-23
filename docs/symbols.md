@@ -19,3 +19,7 @@ Sources: [Mana](https://github.com/andrewgioia/mana) commit `6ca9e696d3bda2519dc
 Regeneration uses `lv_font_conv` 1.5.3 at 26px, 4bpp with the four Mana ranges above and the Commander 2015 glyph from Keyrune. The gear and reset marks use LVGL's built-in symbol font. Other tool icons are native LVGL drawings.
 
 The heart and skull are Font Awesome 5 solid heart (U+F004) and skull (U+F54C), subset at 36px/4bpp from LVGL's bundled `FontAwesome5-Solid+Brands+Regular.woff` using lv_font_conv 1.5.3. Its generated source is `src/assets/heart_symbol.c`; upstream font/icon/code licensing is included in `src/assets/LICENSE-FontAwesome.txt`. This single antialiased glyph replaces the earlier composite heart.
+
+The **Mana Confluence** face also uses Mana's five mana glyphs (W/U/B/R/G, U+E600-U+E604). They are generated separately as `mana_pips` at 18px/4bpp, preserving the existing counter font and all released watch-face metrics. Its source and SIL OFL provenance are the same pinned Mana font described above.
+
+Mana Confluence also uses a 106px/4bpp subset of the same Montserrat Medium source as `life_digits`, named `mana_life_digits`. This native bitmap size avoids clipping-dependent scaled-text resampling. Larger life totals use existing smaller native fonts. The Montserrat OFL license remains in `src/assets/OFL-Montserrat.txt`.

@@ -1,6 +1,6 @@
 # Arcana / MTG Life Counter
 
-**Version 0.16.2** - Eleven selectable watch faces, saved brightness, multi-format play and local-network multiplayer.
+**Version 0.16.3** - Twelve selectable watch faces, saved brightness, multi-format play and local-network multiplayer.
 
 A native Windows digital twin of a round 360 x 360 knob display, with the same LVGL interface running on the ESP32-S3 knob. The app supports Commander, Classic, Commander 2HG, Brawl and Limited, with in-memory matches and a touch/rotary interface.
 
@@ -25,9 +25,13 @@ The Windows digital twin shares its game logic and LVGL interface with a **Guiti
 
 Open **Gear > Watch Face** during a match. Browse the three radial pages using **Next** and **Previous**, then tap a design to apply it. A check mark identifies the current choice; **Back** returns to settings. Selection preserves life, counters, Undo history and multiplayer state, and remains selected after restart and new games.
 
-The eleven designs are **Original**, **Azure Comet**, **Copper Petal**, **Neon Circuit**, **Citrus Relay**, **Sunset Meridian**, **Verdant**, **Prism**, **Obsidian**, **Magenta Ledger** and **Ember Forge**. Original and Ember Forge retain their approved appearance. The other nine use distinct arrangements; Neon Circuit, Verdant, Prism and Obsidian keep their approved palettes. Citrus Relay has top + / bottom - life regions; the other faces use left - / right +. All include opponent controls, both counter shortcuts, settings, recent Undo, battery and lethal warnings.
+The twelve designs are **Original**, **Azure Comet**, **Copper Petal**, **Neon Circuit**, **Citrus Relay**, **Sunset Meridian**, **Verdant**, **Prism**, **Obsidian**, **Magenta Ledger**, **Ember Forge** and **Mana Confluence**. Original and Ember Forge retain their approved appearance. The other layouts use distinct arrangements; Neon Circuit, Verdant, Prism and Obsidian keep their approved palettes. Citrus Relay has top + / bottom - life regions; the other faces use left - / right +. All include opponent controls, both counter shortcuts, settings, recent Undo, battery and lethal warnings.
 
-![All eleven ARCANA watch faces](docs/previews/watch-faces.png)
+![All twelve ARCANA watch faces](docs/previews/watch-faces.png)
+
+Mana Confluence keeps all life, counter, multiplayer, Undo, battery and lethal-warning controls. It appears on the existing third selector page and is remembered after restart. Its five-mana artwork is static; it does not animate while idle.
+
+![Mana Confluence](docs/previews/mana-confluence.png)
 
 **Gear > Brightness** now remembers the selected level after restart. It saves once adjustments have settled for 750 ms, or immediately when leaving the screen. Automatic idle dimming still restores the user's selected level and does not overwrite it. Existing profiles retain their name/identity and start with Original; devices without a saved brightness retain their hardware default. At a saved **0%**, a clockwise turn restores **10%** without changing life.
 
@@ -35,7 +39,8 @@ The Windows Face Studio runs these same firmware renderers. Use the left selecto
 
 ## Latest UI updates
 
-- Firmware **v0.16.2** adds the six-section gear menu, paged Watch Face selector and persistent display settings. Existing OTA-enabled devices can install it from the startup **Update** button.
+- Firmware **v0.16.3** adds **Mana Confluence**, a five-mana-colour design with licensed mana glyphs, bronze trim, ivory life digits and a stained-glass centre. All previous faces remain visually unchanged.
+- Firmware **v0.16.2** introduced the six-section gear menu, paged Watch Face selector and persistent display settings. Existing OTA-enabled devices can install it from the startup **Update** button.
 - The name keyboard uses gentle curved rows. Green **OK** is above the name; **CHANGE** is an inset bottom button, and **Back** remains alone in the center.
 - **123/ABC** and **DEL** are positioned above the keys beside Back. CHANGE affects only the draft until OK confirms it.
 - The Multi Arcana main face shows your saved name. Original and Ember Forge keep the **heart/skull above the gear** and the **battery below it**; the other designs place these indicators to suit their layout.
@@ -241,7 +246,7 @@ The right panel provides encoder buttons, logical power, restart and new-game se
 
 ## Tests and scope
 
-`tools\run_tests.bat` runs eleven suites: game rules, in-memory state snapshots, interrupted device-profile storage recovery, idle-backlight policy/timing statistics, firmware release compatibility, multiplayer protocol/profile behavior, real UDP discovery/sync, separate host/client processes, round-screen UI, SDL smoke and fresh startup across separate processes. Coverage includes all five formats; 2-6 teams and all twelve seats; startup update availability/About/contact navigation and cancelled setup; independent opponent life and commander damage; linked-life corrections; poison thresholds; retained counters; snapshot validation; corrupt profile-slot fallback; bounded Undo/Redo and five-second groups; battery bands; curved touch targets; pooled Undo glyphs; eleven shared watch-face layouts and their real selector; persistent appearance settings, legacy-profile migration and zero-brightness recovery; single-cover fade timing; persistent device identities; keyboard/host/join flows; duplicate and lost packets; rapid-edit coalescing; simultaneous teammate edits; and host/client discovery between separate processes. Screenshots are generated in `build/ui-*.bmp` and `build/simulator-*.bmp`. The separate `tests/firmware_tools_tests.py` checks that the installer rejects altered, incomplete and wrong-device factory backups without accessing hardware.
+`tools\run_tests.bat` runs eleven suites: game rules, in-memory state snapshots, interrupted device-profile storage recovery, idle-backlight policy/timing statistics, firmware release compatibility, multiplayer protocol/profile behavior, real UDP discovery/sync, separate host/client processes, round-screen UI, SDL smoke and fresh startup across separate processes. Coverage includes all five formats; 2-6 teams and all twelve seats; startup update availability/About/contact navigation and cancelled setup; independent opponent life and commander damage; linked-life corrections; poison thresholds; retained counters; snapshot validation; corrupt profile-slot fallback; bounded Undo/Redo and five-second groups; battery bands; curved touch targets; pooled Undo glyphs; twelve shared watch-face layouts and their real selector; persistent appearance settings, legacy-profile migration and zero-brightness recovery; single-cover fade timing; persistent device identities; keyboard/host/join flows; duplicate and lost packets; rapid-edit coalescing; simultaneous teammate edits; and host/client discovery between separate processes. Screenshots are generated in `build/ui-*.bmp` and `build/simulator-*.bmp`. The separate `tests/firmware_tools_tests.py` checks that the installer rejects altered, incomplete and wrong-device factory backups without accessing hardware.
 
 Commander tabs track incoming damage. Classic, Brawl and Limited tabs track opponents' life. Commander 2HG shares life and poison within your team while keeping incoming commander damage separate by recipient. Desktop side panels are simulator controls; device screens use the same LVGL code. The separate firmware target and current physical validation boundary are documented in [firmware/README.md](firmware/README.md).
 
