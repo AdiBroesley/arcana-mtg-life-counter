@@ -7,6 +7,7 @@
 #include "LanTransport.hpp"
 #include "core/DeviceProfile.hpp"
 #include "core/Multiplayer.hpp"
+#include "platform/RoundDisplay.hpp"
 #include <vector>
 #include <iostream>
 #include <string>
@@ -27,6 +28,12 @@ void flush(lv_display_t* display,const lv_area_t* area,uint8_t* data) {
  for(int y=area->y1;y<=area->y2;++y)
   for(int x=area->x1;x<=area->x2;++x)
    pixels[y*W+x]=reinterpret_cast<uint32_t*>(data)[(y-area->y1)*(lv_display_get_buf_active(display)->header.stride/4)+x-area->x1];
+ if(device){
+  lv_area_t face;lv_obj_get_coords(device,&face);
+  int left=std::max<int>(area->x1,face.x1),right=std::min<int>(area->x2,face.x2);
+  if(left<=right)for(int y=std::max<int>(area->y1,face.y1);y<=std::min<int>(area->y2,face.y2);++y)
+   mtg::blackOutsideFace(&pixels[y*W+left],left-face.x1,y-face.y1,right-left+1,1,4);
+ }
  ++flushes; lv_display_flush_ready(display);
 }
 void readTouch(lv_indev_t*,lv_indev_data_t* data) {

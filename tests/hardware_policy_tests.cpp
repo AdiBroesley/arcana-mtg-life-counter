@@ -2,10 +2,24 @@
 #include "platform/TimingStats.hpp"
 #include "platform/BatteryRing.hpp"
 #include "platform/EncoderBatch.hpp"
+#include "platform/RoundDisplay.hpp"
+#include <vector>
 #include <stdexcept>
 #include <iostream>
 void check(bool condition,const char* why){if(!condition)throw std::runtime_error(why);}
 int main(){try{
+ for(unsigned bytes:{2u,4u})for(const auto& area:std::array<std::array<int,4>,5>{{{0,0,360,360},{0,177,12,6},{170,4,20,9},{82,100,196,180},{170,347,20,13}}}){
+  int x=area[0],y=area[1],w=area[2],h=area[3];std::size_t stride=w*bytes+6;
+  std::vector<std::uint8_t> pixels(17+stride*h+17,0xab);
+  mtg::blackOutsideFace(pixels.data()+17,x,y,w,h,bytes,stride);
+  for(int row=0;row<h;++row){
+   for(int col=0;col<w;++col){int dx=2*(x+col)+1-360,dy=2*(y+row)+1-360;bool outside=dx*dx+dy*dy>4*176*176;
+    for(unsigned byte=0;byte<bytes;++byte)check(pixels[17+row*stride+col*bytes+byte]==(outside?0:0xab),"Perimeter mask must clear outside pixels and preserve inside pixels for full/partial RGB565 and RGB8888 transfers");
+   }
+   for(unsigned pad=0;pad<6;++pad)check(pixels[17+row*stride+w*bytes+pad]==0xab,"Perimeter mask must preserve row padding");
+  }
+  for(unsigned guard=0;guard<17;++guard)check(pixels[guard]==0xab&&pixels[pixels.size()-1-guard]==0xab,"Perimeter mask must not write outside the transfer buffer");
+ }
  mtg::EncoderBatch encoder;check(encoder.take().delta==0,"Empty encoder batch");
  encoder.add(1,1000);encoder.add(1,2000);auto clockwise=encoder.take();
  check(clockwise.delta==2&&clockwise.sampledAt==1000,"Encoder batches must keep the oldest pending pulse time");

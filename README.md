@@ -1,6 +1,6 @@
 # Arcana / MTG Life Counter
 
-**Version 0.15.2** - Windows digital twin, multi-format play and local-network multiplayer.
+**Version 0.15.3** - Windows digital twin, multi-format play and local-network multiplayer.
 
 A native Windows digital twin of a round 360 x 360 knob display, with a shared LVGL interface designed for eventual ESP32-S3 deployment. The app supports Commander, Classic, Commander 2HG, Brawl and Limited, with in-memory matches and a touch/rotary interface.
 
@@ -69,6 +69,8 @@ Startup offers **New Game**, **Update** and **About**. Update is enabled only af
 About shows the installed version, Michael Dengl's contact email, and **MagicTG Kreuzlingen**. Tap the email or group button to display its QR code. The contact links are `michaeldengl@hotmail.com` and the supplied MagicTG Kreuzlingen WhatsApp invitation.
 
 Wi-Fi setup displays a scannable code containing the temporary ARCANA network name and password. Scan it with your phone, accept Join, then follow the Wi-Fi sign-in page or notification to enter your home 2.4 GHz Wi-Fi details. If the page does not appear, open **http://192.168.4.1**. Setup closes on Back or after three minutes; it does not run during games. [Wi-Fi setup preview](docs/previews/ui-wifi-setup.png).
+
+The display perimeter outside the face is forced to pure black, including during partial redraws and menu transitions. Firmware clears the full 360 x 360 LCD before enabling the backlight so stale pixels cannot remain around the circular face. This uses the existing transfer buffer rather than adding another LVGL masking layer.
 
 | About and contact | MagicTG Kreuzlingen invite | Firmware updates |
 | --- | --- | --- |

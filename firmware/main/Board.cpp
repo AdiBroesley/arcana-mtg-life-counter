@@ -1,5 +1,6 @@
 #include "Board.hpp"
 #include "PanelInit.hpp"
+#include "platform/RoundDisplay.hpp"
 #include "driver/gpio.h"
 #include "driver/i2c.h"
 #include "driver/ledc.h"
@@ -251,6 +252,7 @@ void Board::flush(lv_display_t* display,const lv_area_t* area,uint8_t* pixels) {
  for(int y=area->y1;y<=area->y2;y+=rows){
   int height=std::min(rows,static_cast<int>(area->y2-y+1));size_t bytes=w*height*2;
   std::memcpy(b.dmaBuffer_,pixels+(y-area->y1)*w*2,bytes);
+  blackOutsideFace(b.dmaBuffer_,area->x1,y,w,height,2);
   lv_draw_sw_rgb565_swap(b.dmaBuffer_,w*height);
   ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(b.panel_,area->x1,y,area->x2+1,y+height,b.dmaBuffer_));
   ESP_ERROR_CHECK(xSemaphoreTake(b.txDone_,pdMS_TO_TICKS(100))==pdTRUE?ESP_OK:ESP_ERR_TIMEOUT);
@@ -297,6 +299,15 @@ void Board::begin() {
 #ifdef CONFIG_ARCANA_ROTATE_180
  ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel_,true,true));
 #endif
+ // LCD RAM can retain arbitrary/stale edge pixels outside LVGL's rounded
+ // screen. Clear the complete square address space before lighting the panel.
+ std::memset(dmaBuffer_,0,bufferSize);
+ for(int y=0;y<width;y+=rows){
+  const int height=std::min(rows,width-y);
+  ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(panel_,0,y,width,y+height,dmaBuffer_));
+  ESP_ERROR_CHECK(xSemaphoreTake(txDone_,pdMS_TO_TICKS(100))==pdTRUE?ESP_OK:ESP_ERR_TIMEOUT);
+ }
+ ESP_LOGI("DISPLAY","Cleared 360x360 LCD; outside face radius %d stays black",faceRadius);
  ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_,true));
 
  i2c_config_t i2c{};i2c.mode=I2C_MODE_MASTER;i2c.sda_io_num=9;i2c.scl_io_num=10;

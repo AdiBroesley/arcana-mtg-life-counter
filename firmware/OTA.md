@@ -39,7 +39,7 @@ Offline, connection failures, no release, or an incompatible release leave Updat
 Keep `src/core/AppInfo.hpp`, the top-level CMake project and `firmware/CMakeLists.txt` on the same numeric version. Build and test, then run:
 
 ```powershell
-.\.tools\esp-python\Scripts\python.exe tools/package_firmware.py --tag v0.15.2
+.\.tools\esp-python\Scripts\python.exe tools/package_firmware.py --tag v0.15.3
 ```
 
 Packaging checks the built image's project, embedded version and size, then creates `build/release-assets/arcana-jc3636k718.bin`, a JSON description and `SHA256SUMS`. The binary filename is part of the model compatibility contract. GitHub supplies its asset digest; the device requires `sha256:` followed by 64 lowercase hex digits.

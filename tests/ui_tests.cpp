@@ -1,6 +1,7 @@
 #include "lvgl.h"
 #include "ui/AppUI.hpp"
 #include "core/AppInfo.hpp"
+#include "platform/RoundDisplay.hpp"
 #include "SimulatorHardware.hpp"
 #include "third_party/json.hpp"
 #include <cstdlib>
@@ -41,8 +42,10 @@ void check(bool condition,const std::string& message) {
 void flush(lv_display_t* d,const lv_area_t* a,uint8_t* data) {
  ++flushCount;
  flushedPixels+=static_cast<std::uint64_t>(lv_area_get_width(a))*lv_area_get_height(a);
- for(int y=a->y1;y<=a->y2;++y)for(int x=a->x1;x<=a->x2;++x)
-  pixels[y*size+x]=reinterpret_cast<uint32_t*>(data)[(y-a->y1)*(a->x2-a->x1+1)+x-a->x1];
+ for(int y=a->y1;y<=a->y2;++y){
+  for(int x=a->x1;x<=a->x2;++x)pixels[y*size+x]=reinterpret_cast<uint32_t*>(data)[(y-a->y1)*(a->x2-a->x1+1)+x-a->x1];
+  mtg::blackOutsideFace(&pixels[y*size+a->x1],a->x1,y,lv_area_get_width(a),1,4);
+ }
  lv_display_flush_ready(d);
 }
 void read(lv_indev_t*,lv_indev_data_t* data) {
@@ -97,7 +100,11 @@ void holdAt(int x,int y){hardware.setTouch({x,y,true});tick(35);hardware.setTouc
 void trackers(){app->openTrackers();tick();}
 void rotate(int steps){hardware.rotate(steps);tick();}
 void screenshot(const char* file) {
- tick();std::ofstream out(file,std::ios::binary);
+ tick();
+ for(int y=0;y<size;++y)for(int x=0;x<size;++x){int dx=2*x+1-size,dy=2*y+1-size;
+  if(dx*dx+dy*dy>4*mtg::faceRadius*mtg::faceRadius)check((pixels[y*size+x]&0xffffff)==0,"every screen must keep the panel perimeter black");
+ }
+ std::ofstream out(file,std::ios::binary);
  auto u16=[&](unsigned v){out.put(static_cast<char>(v));out.put(static_cast<char>(v>>8));};
  auto u32=[&](unsigned v){u16(v);u16(v>>16);};
  out.write("BM",2);u32(54+size*size*4);u32(0);u32(54);u32(40);u32(size);u32(size);u16(1);u16(32);u32(0);u32(size*size*4);u32(2835);u32(2835);u32(0);u32(0);
@@ -125,9 +132,9 @@ int main() {
  check(!lv_obj_is_visible(setupQr)&&find(lv_screen_active(),"Connecting to Wi-Fi..."),"Connecting hides the expired setup QR");
  updates.current.phase=mtg::UpdatePhase::Current;++updates.current.revision;tick();check(find(lv_screen_active(),"FIRMWARE"),"A completed setup returns to firmware status");
  click("Wi-Fi setup");auto cancellations=updates.cancels;click("Back");check(updates.cancels==cancellations+1&&find(lv_screen_active(),"FIRMWARE"),"Setup Back closes the temporary network and returns one level");click("Back");click("Back");
- updates.current.phase=mtg::UpdatePhase::Available;updates.current.latest="0.15.3";updates.current.message="New version ready to install";++updates.current.revision;tick();
+ updates.current.phase=mtg::UpdatePhase::Available;updates.current.latest="0.15.4";updates.current.message="New version ready to install";++updates.current.revision;tick();
  check(!lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Update")),LV_STATE_DISABLED),"compatible newer release enables Update");
- click("Update");check(find(lv_screen_active(),"Latest 0.15.3"),"update page shows the available version");screenshot("ui-updates.bmp");click("Back");
+ click("Update");check(find(lv_screen_active(),"Latest 0.15.4"),"update page shows the available version");screenshot("ui-updates.bmp");click("Back");
  updates.current.phase=mtg::UpdatePhase::Current;++updates.current.revision;tick();
  check(lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Update")),LV_STATE_DISABLED),"Update disables when no newer release exists");
  rotate(100);check(!game.state().active && game.player().life==40,"startup rotary cannot edit game");
