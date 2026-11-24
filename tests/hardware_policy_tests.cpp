@@ -28,7 +28,7 @@ int main(){try{
  check(counterclockwise.delta==-2&&counterclockwise.sampledAt==3000,"Counterclockwise direction and batch time");
  encoder.add(1,5000);encoder.add(-1,6000);encoder.add(1,UINT64_C(0x100000123));auto reversed=encoder.take();
  check(reversed.delta==1&&reversed.sampledAt==UINT64_C(0x100000123),"Reversed net-zero batches must reset latency and preserve 64-bit timestamps");
- mtg::IdleBacklight light;light.setBrightness(75,100);
+ mtg::IdleBacklight light;mtg::DisplaySettings protectedWake;protectedWake.wakeProtection=true;light.configure(protectedWake,100);light.setBrightness(75,100);
  light.tick(5099);check(light.output()==75,"Dimmed too soon");light.tick(5100);check(light.output()==10&&light.brightness()==75,"Idle dim must preserve selection");
  check(!light.touch(5200,true)&&light.output()==75,"Wake press must restore brightness and be consumed");
  check(!light.touch(6200,true),"Held wake touch must remain consumed");check(!light.touch(6300,false),"Wake release must not click");
@@ -37,9 +37,16 @@ int main(){try{
  check(!light.rotation(11600)&&light.output()==75,"Wake rotation must not edit values");
  check(!light.rotation(11700),"Wake rotation burst must remain consumed");check(light.rotation(12000),"Next independent rotation must work");
  light.touch(12500,true);light.tick(30000,true);check(!light.dimmed(),"Never dim while held");light.touch(30001,false);light.tick(35001);check(light.dimmed(),"Dim countdown must resume after release");
- light.setBrightness(5,36000);light.tick(50000);check(light.output()==5&&!light.dimmed(),"Idle policy must not brighten an already low selection");
- light.setBrightness(0,51000);light.tick(60000);check(light.output()==0&&!light.dimmed(),"Respect deliberate zero brightness");
+ light.setBrightness(5,36000);light.tick(50000);check(light.output()==5&&light.dimmed(),"Idle policy must not brighten an already low selection");
+ light.setBrightness(0,51000);light.tick(60000);check(light.output()==0&&light.dimmed(),"Respect deliberate zero brightness");
  light.setBrightness(90,61000);light.tick(66000);light.tick(66001,true);check(light.dimmed(),"Raw held sample must not bypass wake suppression");check(!light.touch(66002,true),"Queued wake must still be consumed");
+ mtg::IdleBacklight immediate;immediate.setBrightness(6,0);immediate.tick(5000);
+ check(immediate.dimmed()&&immediate.output()==6,"Idle state must be tracked even below 10 percent");
+ check(immediate.rotation(5001)&&!immediate.dimmed(),"Wake protection defaults off: first wheel turn edits immediately");
+ immediate.tick(10001);check(immediate.touch(10002,true)&&immediate.touch(10003,false),"Unprotected first tap and release must both pass");
+ mtg::DisplaySettings custom;custom.dimAfterSeconds=12;custom.idleBrightness=3;immediate.configure(custom,11000);immediate.setBrightness(80,11000);immediate.tick(22999);check(!immediate.dimmed(),"Custom delay respected");immediate.tick(23000);check(immediate.output()==3,"Custom idle brightness respected");
+ custom.dimAfterSeconds=0;immediate.configure(custom,24000);immediate.tick(999999);check(!immediate.dimmed()&&immediate.output()==80,"Never disables idle dimming");
+ custom.dimAfterSeconds=1;custom.wakeProtection=true;immediate.configure(custom,1000000);immediate.setBrightness(4,1000000);immediate.tick(1001000);check(!immediate.touch(1001001,true)&&!immediate.touch(1001002,false),"Wake protection applies even below 10 percent");
  mtg::TimingStats stats;check(stats.percentile(95)==0,"Empty metric");for(unsigned i=1;i<=100;++i)stats.add(i);
  check(stats.count()==100&&stats.mean()==50&&stats.percentile(50)==50&&stats.percentile(95)==95&&stats.maximum()==100,"Timing summary incorrect");
  for(unsigned i=0;i<128;++i)stats.add(200);check(stats.percentile(95)==200&&stats.maximum()==200,"Rolling percentile incorrect");

@@ -1,5 +1,9 @@
 # ARCANA on Guition JC3636K718
 
+**v0.17.0:** adds saved idle-display controls and experimental NimBLE multiplayer. It is distributed through [GitHub Releases](https://github.com/michaelDengl/arcana-mtg-life-counter/releases/tag/v0.17.0) and the knob's **Update** button. No two-knob BLE test or battery measurement has been performed; use the retained Wi-Fi option with earlier firmware. See [implementation and validation notes](../docs/ble-display-candidate.md).
+
+For existing Wi-Fi knobs select **Multi ARCANA > confirm name > Connection > Wi-Fi** before Host/Join. Updates continue to use Wi-Fi regardless of the game connection setting.
+
 This ESP-IDF build uses the existing ARCANA game engine and LVGL 9.2.2 interface on the Guition JC3636K718 360 × 360 knob. It does not use or downgrade to the vendor's LVGL 8 demo. Pin/configuration provenance is in [hardware notes](../docs/hardware.md).
 
 The first hardware installation requires a complete, verified factory flash backup. Build success alone does not establish that display orientation, touch or rotation work on a physical unit.

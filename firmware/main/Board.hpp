@@ -34,7 +34,9 @@ public:
  void setProfiler(Profiler* profiler){profiler_=profiler;}
  IProfiler* profiler()const override{return profiler_;}
  bool dimmed()const{return backlight_.dimmed();}
- unsigned outputBrightness()const{return backlight_.output();}
+ unsigned outputBrightness()const override{return backlight_.output();}
+ bool idle()const override{return backlight_.dimmed();}
+ void setDisplaySettings(const DisplaySettings& value)override;
  uint64_t takeTransferMicros(){auto time=transferMicros_;transferMicros_=0;return time;}
  uint32_t takeTransferPixels(){auto pixels=transferPixels_;transferPixels_=0;return pixels;}
  BatteryStatus battery() const override {return battery_;}

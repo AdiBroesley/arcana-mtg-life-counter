@@ -17,6 +17,7 @@ public:
  std::vector<PeerPacket> receive()override;
  const std::string& error()const override;
  bool hosting()const;
+ const char* description()const override{return "Wi-Fi";}
  bool joinInternet(const std::string& ssid,const std::string& password);
  bool setupNetwork(const std::string& ssid,const std::string& password);
  bool updateNetwork()const;

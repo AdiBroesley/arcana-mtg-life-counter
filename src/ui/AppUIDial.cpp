@@ -124,6 +124,7 @@ void AppUI::refreshLifecycle() {
  if(view_==View::PlayerSetup){text(value_,draftFormat_==GameFormat::TwoHeadedGiant?std::to_string(draftPlayers_/2)+" Teams / "+std::to_string(draftPlayers_)+"P":std::to_string(draftPlayers_)+"-Players");if(hint_)text(hint_,notice_);}
 }
 void AppUI::buildDial() {
+ if(idleLifeView_){buildIdleDial();return;}
  if(selectedPlayer_==1&&redesignedFace(faceDesign_)){buildFaceLayout();return;}
  if(selectedPlayer_==1)playerTabs();
  if(selectedPlayer_==1) {
@@ -199,6 +200,7 @@ void AppUI::buildDial() {
  }
 }
 bool AppUI::lifeHoldPositionValid() const {
+ if(idleLifeView_){auto point=hardware_.touch();lv_area_t area;lv_obj_get_coords(screen_,&area);int x=point.x-area.x1,y=point.y-area.y1;return (x-180)*(x-180)+(y-180)*(y-180)<=176*176&&(lifeHoldSign_>0?x>=180:x<180);}
  if(redesignedFace(faceDesign_))return redesignedLifeHoldValid();
  auto point=hardware_.touch();lv_area_t area;lv_obj_get_coords(screen_,&area);
  int x=point.x-area.x1,y=point.y-area.y1,dx=x-180,dy=y-190;
@@ -396,6 +398,7 @@ void AppUI::refreshBattery() {
  if(state<0)part(9,6,6,1,muted);
 }
 void AppUI::refreshDial() {
+ if(idleLifeView_){refreshIdleDial();return;}
  refreshBattery();
  refreshTabs();
  if(selectedPlayer_==1) {

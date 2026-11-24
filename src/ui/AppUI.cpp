@@ -14,7 +14,7 @@ unsigned counterColor(Counter c) {
 }
 std::string signedNumber(std::int64_t n){return std::to_string(n);}
 }
-AppUI::AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile,Multiplayer* multiplayer,IFirmwareUpdate* updates):updates_(updates),profile_(profile?profile:&fallbackProfile_),multiplayer_(multiplayer),game_(game),hardware_(hardware),random_(random),screen_(screen) {faceDesign_=profile_->faceDesign();if(profile_->hasBrightness())hardware_.setBrightness(profile_->brightness());observedBrightness_=hardware_.brightness();build();refresh();}
+AppUI::AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile,Multiplayer* multiplayer,IFirmwareUpdate* updates):updates_(updates),profile_(profile?profile:&fallbackProfile_),multiplayer_(multiplayer),game_(game),hardware_(hardware),random_(random),screen_(screen) {if(multiplayer_)multiplayer_->selectRadio(profile_->radio());faceDesign_=profile_->faceDesign();hardware_.setDisplaySettings(profile_->displaySettings());if(profile_->hasBrightness())hardware_.setBrightness(profile_->brightness());observedBrightness_=hardware_.brightness();build();refresh();}
 void AppUI::clicked(lv_event_t* event) {
  auto* binding=static_cast<Binding*>(lv_event_get_user_data(event));
  if(binding->ui->hardware_.powered()) binding->ui->handle(binding->action,binding->arg);
@@ -69,7 +69,7 @@ lv_obj_t* AppUI::bigValue(int y) {
 void AppUI::stepButtons(int y) {
  button(screen_,"-",74,y,70,42,Minus);button(screen_,"+",216,y,70,42,Plus);
 }
-void AppUI::navigate(View view) {if(view_==View::Brightness&&view!=View::Brightness)saveBrightness();transitionPending_=true;lifeHoldActive_=false;lifeHoldCancelled_=true;view_=view;notice_.clear();rebuild_=true;}
+void AppUI::navigate(View view) {if((view_==View::DimDelay||view_==View::IdleBrightness)&&view!=view_)saveDisplayDraft();if(view_==View::Brightness&&view!=View::Brightness)saveBrightness();transitionPending_=true;lifeHoldActive_=false;lifeHoldCancelled_=true;view_=view;notice_.clear();rebuild_=true;}
 void AppUI::beginArcanaSelection(View returnTo){arcanaReturn_=returnTo;hostPending_=false;navigate(View::ArcanaMode);}
 void AppUI::beginFormatSelection(View returnTo) {formatReturn_=returnTo;draftFormat_=game_.state().format;draftPlayers_=draftFormat_==GameFormat::Commander||draftFormat_==GameFormat::TwoHeadedGiant?4:2;navigate(View::FormatSelect);}
 void AppUI::requestNewGame() {if(game_.state().active){formatReturn_=View::Home;navigate(View::ResetConfirm);}else beginArcanaSelection(View::Startup);}
@@ -83,10 +83,18 @@ void AppUI::selectPlayer(unsigned player) {
 void AppUI::handle(Action action,std::uint32_t arg) {
  refreshDirty_=true;
  game_.setActionTime(lv_tick_get());
- if(!game_.state().active&&view_!=View::ContactCode&&view_!=View::About&&view_!=View::Updates&&view_!=View::WifiSetup&&view_!=View::Startup&&view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby&&view_!=View::PlayerSetup&&view_!=View::FormatSelect)return;
+ if(!game_.state().active&&view_!=View::ContactCode&&view_!=View::About&&view_!=View::Updates&&view_!=View::WifiSetup&&view_!=View::Startup&&view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::Connection&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby&&view_!=View::PlayerSetup&&view_!=View::FormatSelect)return;
 
  if(updateStatus_.phase==UpdatePhase::Installing||updateStatus_.phase==UpdatePhase::Ready)return;
  switch(action) {
+  case OpenConnection:navigate(View::Connection);break;
+  case ChooseConnection:if(arg<=1){auto radio=static_cast<PeerRadio>(arg);if(multiplayer_&&!multiplayer_->selectRadio(radio)){notice_="Leave the game first";break;}if(profile_->setRadio(radio))navigate(View::HostJoin);else{if(multiplayer_)multiplayer_->selectRadio(profile_->radio());notice_=profile_->error();}}break;
+  case OpenDisplay:navigate(View::Display);break;
+  case OpenDimDelay:displayDraft_=profile_->displaySettings().dimAfterSeconds;navigate(View::DimDelay);break;
+  case OpenIdleBrightness:displayDraft_=profile_->displaySettings().idleBrightness;navigate(View::IdleBrightness);break;
+  case ToggleLifeOnly:{auto value=profile_->displaySettings();value.lifeOnly=!value.lifeOnly;applyDisplaySettings(value);rebuild_=true;break;}
+  case ToggleWakeProtection:{auto value=profile_->displaySettings();value.wakeProtection=!value.wakeProtection;applyDisplaySettings(value);rebuild_=true;break;}
+
   case OpenFaces:facePage_=faceDesign_/4;navigate(View::FaceSelect);break;
   case FacePage:facePage_=arg;navigate(View::FaceSelect);break;
   case ChooseFace:if(profile_->setFaceDesign(arg))setFaceDesign(arg);else {notice_=profile_->error();rebuild_=true;}break;
@@ -119,7 +127,7 @@ void AppUI::handle(Action action,std::uint32_t arg) {
   case ChooseShortcut:game_.setShortcut(pickerSide_,static_cast<Counter>(arg));goHome();break;
   case RecentUndo:game_.undoRecent(lv_tick_get());break;
   case OpenBrightness:navigate(View::Brightness);break;
-  case ToolBack:if(view_==View::ContactCode){navigate(View::About);break;}if(view_==View::About){navigate(View::Startup);break;}if(view_==View::Updates||view_==View::WifiSetup){if(updates_)updates_->cancel();navigate(view_==View::WifiSetup?View::Updates:informationReturn_);break;}if(view_==View::ArcanaMode){navigate(arcanaReturn_);break;}if(view_==View::NameSetup){navigate(View::ArcanaMode);break;}if(view_==View::HostJoin){nameDraft_=profile_->name();navigate(View::NameSetup);break;}if(view_==View::BrowseGames){if(multiplayer_)multiplayer_->leave();navigate(View::HostJoin);break;}if(view_==View::NetworkLobby){if(multiplayer_)multiplayer_->leave();game_.endGame();navigate(View::HostJoin);break;}if(view_==View::FormatSelect){navigate(formatReturn_);break;}if(view_==View::PlayerSetup){navigate(View::FormatSelect);break;}if(view_==View::Gear||view_==View::CounterPicker)goHome();else if(view_==View::EndConfirm)navigate(endReturn_);else navigate(View::Gear);break;
+  case ToolBack:if(view_==View::Brightness||view_==View::DimDelay||view_==View::IdleBrightness){navigate(View::Display);break;}if(view_==View::Connection){navigate(View::HostJoin);break;}if(view_==View::ContactCode){navigate(View::About);break;}if(view_==View::About){navigate(View::Startup);break;}if(view_==View::Updates||view_==View::WifiSetup){if(updates_)updates_->cancel();navigate(view_==View::WifiSetup?View::Updates:informationReturn_);break;}if(view_==View::ArcanaMode){navigate(arcanaReturn_);break;}if(view_==View::NameSetup){navigate(View::ArcanaMode);break;}if(view_==View::HostJoin){nameDraft_=profile_->name();navigate(View::NameSetup);break;}if(view_==View::BrowseGames){if(multiplayer_)multiplayer_->leave();navigate(View::HostJoin);break;}if(view_==View::NetworkLobby){if(multiplayer_)multiplayer_->leave();game_.endGame();navigate(View::HostJoin);break;}if(view_==View::FormatSelect){navigate(formatReturn_);break;}if(view_==View::PlayerSetup){navigate(View::FormatSelect);break;}if(view_==View::Gear||view_==View::CounterPicker)goHome();else if(view_==View::EndConfirm)navigate(endReturn_);else navigate(View::Gear);break;
   case OpenGear:navigate(View::Gear);break;
   case AskReset:formatReturn_=View::Gear;navigate(View::ResetConfirm);break;
   case ResetYes:beginArcanaSelection(formatReturn_);break;
@@ -200,8 +208,9 @@ void AppUI::adjust(std::int64_t delta) {
  refreshDirty_=true;
  bool ok=true;
  switch(view_) {
+  case View::DimDelay:case View::IdleBrightness:displayDraft_=static_cast<unsigned>(std::clamp<std::int64_t>(static_cast<std::int64_t>(displayDraft_)+std::clamp<std::int64_t>(delta,-300,300),0,view_==View::DimDelay?300:100));break;
   case View::Brightness:hardware_.setBrightness(static_cast<unsigned>(std::clamp<std::int64_t>(hardware_.brightness()+std::clamp<std::int64_t>(delta,-100,100),0,100)));break;
-  case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:case View::Startup:case View::ArcanaMode:case View::NameSetup:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:case View::FormatSelect:case View::EndConfirm:break;
+  case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:case View::Startup:case View::ArcanaMode:case View::NameSetup:case View::Connection:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:case View::FormatSelect:case View::EndConfirm:break;
   case View::PlayerSetup:if(draftFormat_==GameFormat::TwoHeadedGiant)draftPlayers_=2*static_cast<unsigned>(std::clamp<std::int64_t>(draftPlayers_/2+std::clamp<std::int64_t>(delta,-6,6),2,6));else if(draftFormat_==GameFormat::Commander||draftFormat_==GameFormat::Classic)draftPlayers_=static_cast<unsigned>(std::clamp<std::int64_t>(draftPlayers_+std::clamp<std::int64_t>(delta,-6,6),2,6));break;
   case View::Home:
    if(selectedPlayer_==1)ok=game_.adjustLife(delta);
@@ -244,13 +253,13 @@ void AppUI::build() {
  lv_obj_set_style_clip_corner(screen_,view_!=View::Home||selectedPlayer_!=1,0);
  lv_obj_set_style_border_width(screen_,0,0);lv_obj_set_style_pad_all(screen_,0,0);
  lv_obj_remove_flag(screen_,LV_OBJ_FLAG_SCROLLABLE);
- dialFrame();
+ if(!idleLifeView_)dialFrame();else lv_obj_set_style_bg_color(screen_,lv_color_hex(0),0);
  const auto& state=game_.state();const auto& p=game_.player();
  switch(view_) {
   case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:buildInformation();break;
-  case View::ArcanaMode:case View::NameSetup:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:buildMultiplayer();break;
+  case View::ArcanaMode:case View::NameSetup:case View::Connection:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:buildMultiplayer();break;
   case View::Startup:case View::FormatSelect:case View::PlayerSetup:buildLifecycle();break;
-  case View::FaceSelect:case View::EndConfirm:case View::Brightness:case View::Gear:case View::ResetConfirm:case View::CoinResult:case View::RollResult:buildTools();break;
+  case View::Display:case View::DimDelay:case View::IdleBrightness:case View::FaceSelect:case View::EndConfirm:case View::Brightness:case View::Gear:case View::ResetConfirm:case View::CoinResult:case View::RollResult:buildTools();break;
   case View::Home:buildDial();break;
   case View::CounterPicker:buildPicker();break;
   case View::Menu: {
@@ -354,9 +363,10 @@ void AppUI::refresh() {
  const auto& p=game_.player();const auto& state=game_.state();
  switch(view_) {
   case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:refreshInformation();break;
-  case View::ArcanaMode:case View::NameSetup:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:refreshMultiplayer();break;
+  case View::ArcanaMode:case View::NameSetup:case View::Connection:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:refreshMultiplayer();break;
   case View::Startup:case View::FormatSelect:case View::PlayerSetup:case View::EndConfirm:refreshLifecycle();break;
   case View::Home:refreshDial();break;
+  case View::DimDelay:case View::IdleBrightness:text(value_,view_==View::DimDelay?(displayDraft_?std::to_string(displayDraft_)+" sec":"Never"):std::to_string(displayDraft_)+"%");break;
   case View::Brightness:text(value_,std::to_string(hardware_.brightness())+"%");if(brightnessSlider_)lv_slider_set_value(brightnessSlider_,hardware_.brightness(),LV_ANIM_OFF);break;
   case View::Counter: {
    auto value=p.counters[static_cast<unsigned>(counter_)];number(value_,std::to_string(value));
@@ -405,12 +415,14 @@ void AppUI::advanceTransition() {
  // Ease out over six short frames, then perform no further animation work.
  unsigned remaining=180-elapsed;setContentOpacity(static_cast<lv_opa_t>(255-255*remaining*remaining/(180*180)));
 }
+void AppUI::applyDisplaySettings(const DisplaySettings& value){if(profile_->setDisplaySettings(value)){hardware_.setDisplaySettings(value);notice_.clear();}else notice_=profile_->error();refreshDirty_=true;}
+void AppUI::saveDisplayDraft(){auto value=profile_->displaySettings();if(view_==View::DimDelay)value.dimAfterSeconds=displayDraft_;else value.idleBrightness=displayDraft_;applyDisplaySettings(value);}
 void AppUI::saveBrightness(){
  brightnessPending_=false;observedBrightness_=hardware_.brightness();
  if((!profile_->hasBrightness()||profile_->brightness()!=observedBrightness_)&&!profile_->setBrightness(observedBrightness_)){notice_=profile_->error();refreshDirty_=true;}
 }
 void AppUI::update() {
- lastUpdateWork_=false;
+ lastUpdateWork_=false;hardware_.updateIdle(lv_tick_get());
  if(updates_){auto status=updates_->status();if(status.revision!=updateRevision_){updateRevision_=status.revision;updateStatus_=std::move(status);if(view_==View::WifiSetup&&(updateStatus_.phase==UpdatePhase::Available||updateStatus_.phase==UpdatePhase::Current||updateStatus_.phase==UpdatePhase::Error))navigate(View::Updates);if(view_==View::Startup||view_==View::About||view_==View::Updates||view_==View::WifiSetup)refreshDirty_=true;}}
  if(multiplayer_){
   if(networkRevision_!=multiplayer_->revision()){networkRevision_=multiplayer_->revision();refreshDirty_=true;}
@@ -422,7 +434,7 @@ void AppUI::update() {
  }
 
  if(lifeHoldActive_){if(!hardware_.powered()){lifeHoldActive_=false;lifeHoldCancelled_=true;}else if(hardware_.touch().pressed)repeatLifeHold(lv_tick_get());}
- if(view_!=View::ContactCode&&view_!=View::About&&view_!=View::Updates&&view_!=View::WifiSetup&&view_!=View::Startup && view_!=View::PlayerSetup && view_!=View::FormatSelect && view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby && !game_.state().active)navigate(View::Startup);
+ if(view_!=View::ContactCode&&view_!=View::About&&view_!=View::Updates&&view_!=View::WifiSetup&&view_!=View::Startup && view_!=View::PlayerSetup && view_!=View::FormatSelect && view_!=View::ArcanaMode&&view_!=View::NameSetup&&view_!=View::Connection&&view_!=View::HostJoin&&view_!=View::BrowseGames&&view_!=View::NetworkLobby && !game_.state().active)navigate(View::Startup);
  game_.setActionTime(lv_tick_get());
  auto delta=hardware_.takeRotation();if(delta){auto before=game_.revision();if(hardware_.powered()){
   // A saved 0% must never leave the startup screen impossible to reach.
@@ -441,7 +453,9 @@ void AppUI::update() {
  if(brightnessNow!=observedBrightness_){observedBrightness_=brightnessNow;brightnessChangedAt_=lv_tick_get();brightnessPending_=true;}
  if(brightnessPending_&&lv_tick_get()-brightnessChangedAt_>=750)saveBrightness();
  if(view_==View::Brightness && value_ && std::to_string(hardware_.brightness())+"%"!=lv_label_get_text(value_))refreshDirty_=true;
- if(view_==View::Home){refreshBattery();if(selectedPlayer_==1){auto undo=game_.recentUndoLabel(lv_tick_get());if((undo.empty()?"Undo":undo)!=undoCurvedText_)refreshDirty_=true;}}
+ bool wantIdle=profile_->displaySettings().lifeOnly&&hardware_.idle()&&game_.state().active&&view_==View::Home&&selectedPlayer_==1;
+ if(wantIdle!=idleLifeView_&&(wantIdle||(!hardware_.touch().pressed&&!lifeHoldActive_))){idleLifeView_=wantIdle;transitionPending_=false;transitionActive_=false;rebuild_=true;}
+ if(view_==View::Home&&!idleLifeView_){refreshBattery();if(selectedPlayer_==1){auto undo=game_.recentUndoLabel(lv_tick_get());if((undo.empty()?"Undo":undo)!=undoCurvedText_)refreshDirty_=true;}}
  if(rebuild_){build();refreshDirty_=true;lastUpdateWork_=true;}
  if(refreshDirty_){refresh();refreshDirty_=false;lastUpdateWork_=true;}
  if(transitionActive_)lastUpdateWork_=true;

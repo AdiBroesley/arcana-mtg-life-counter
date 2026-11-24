@@ -1,4 +1,5 @@
 #include "AppUI.hpp"
+#include "assets/Fonts.hpp"
 #include "Widgets/DialWidgets.hpp"
 #include <algorithm>
 #include <cmath>
@@ -27,8 +28,13 @@ void AppUI::buildMultiplayer(){
   auto* change=button(screen_,"CHANGE",126,303,108,25,NameChange,0,0x0b2130);lv_obj_set_style_pad_all(change,0,0);lv_obj_set_style_border_color(change,lv_color_hex(teal),0);lv_obj_set_style_radius(change,12,0);lv_obj_set_style_text_color(lv_obj_get_child(change,0),lv_color_hex(teal),0);
 
  }else if(view_==View::HostJoin){
-  radialSector("Host",0,2,HostGame,0,0x246e88,ToolIcon::LifeLink);radialSector("Join",1,2,FindGames,0,0x159870,ToolIcon::Plus);
-  hint_=label(screen_,"",84,116,192,&lv_font_montserrat_14,ink);
+  radialSector("Host",0,3,HostGame,0,0x246e88,ToolIcon::LifeLink);radialSector("Join",1,3,FindGames,0,0x159870,ToolIcon::Plus);radialSector("Connection",2,3,OpenConnection,0,0x6d587d,ToolIcon::LifeLink);
+  label(screen_,profile_->radio()==PeerRadio::Bluetooth?"Bluetooth (test)":"Wi-Fi",103,110,154,&tab_font,ink);
+  hint_=label(screen_,"",84,124,192,&tab_font,ink);
+ }else if(view_==View::Connection){
+  radialSector("Bluetooth",0,2,ChooseConnection,0,0x326e88,ToolIcon::LifeLink);radialSector("Wi-Fi",1,2,ChooseConnection,1,0x159870,ToolIcon::LifeLink);
+  label(screen_,"Experimental / all knobs need this build",65,114,230,&tab_font,ink);
+  if(multiplayer_&&std::string(multiplayer_->connectionName())=="LAN simulation")label(screen_,"Twin uses LAN for both options",88,315,184,&tab_font,ink);
  }else if(view_==View::BrowseGames){
   auto count=multiplayer_?multiplayer_->lobbies().size():0;unsigned pageCount=static_cast<unsigned>(std::max<std::size_t>(1,(count+2)/3));lobbyPage_%=pageCount;unsigned begin=lobbyPage_*3,visible=static_cast<unsigned>(std::min<std::size_t>(3,count-begin));
   if(!count){radialSector("No games yet",0,2,NoAction,0,0x246e88,ToolIcon::LifeLink);radialSector("Refresh",1,2,RefreshGames,0,0x159870,ToolIcon::Reset);}

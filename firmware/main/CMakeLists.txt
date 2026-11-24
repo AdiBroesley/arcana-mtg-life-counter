@@ -1,6 +1,6 @@
 set(APP_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 idf_component_register(
- SRCS main.cpp Board.cpp FlashStorage.cpp Wifi.cpp FirmwareUpdate.cpp
+ SRCS main.cpp Board.cpp FlashStorage.cpp Wifi.cpp Bluetooth.cpp FirmwareUpdate.cpp
   "${APP_ROOT}/src/core/GameState.cpp"
   "${APP_ROOT}/src/core/RandomTools.cpp"
   "${APP_ROOT}/src/core/DeviceProfile.cpp"
@@ -21,7 +21,7 @@ idf_component_register(
   "${APP_ROOT}/src/assets/tab_font.c"
   "${APP_ROOT}/simulator/LanTransport.cpp"
  INCLUDE_DIRS "." "${APP_ROOT}/src" "${APP_ROOT}/simulator"
- REQUIRES driver esp_lcd esp_timer esp_wifi esp_netif nvs_flash spiffs esp_psram esp_pm esp_http_client esp_http_server app_update mbedtls)
+ REQUIRES driver esp_lcd esp_timer esp_wifi esp_netif nvs_flash spiffs esp_psram esp_pm esp_http_client esp_http_server app_update mbedtls bt)
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error=missing-field-initializers -Wno-error=misleading-indentation)
 # Give the LVGL component the embedded configuration, independently of desktop LVGL.

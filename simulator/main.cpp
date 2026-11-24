@@ -215,7 +215,7 @@ text(root,"LATEST EVENT",780,477,0x00d8ff);logLabel=text(root,"Ready",780,506);
    if(e.type==SDL_MOUSEMOTION) hardware.setTouch({e.motion.x,e.motion.y,(e.motion.state&SDL_BUTTON_LMASK)!=0});
    if(e.type==SDL_WINDOWEVENT && e.window.event==SDL_WINDOWEVENT_FOCUS_LOST) hardware.setTouch({});
   }
-  auto now=SDL_GetTicks();lv_tick_inc(smoke?20:now-last);last=now;ui.update();if(studio&&selectorFace!=ui.faceDesign())refreshDesignSelector();lv_obj_set_style_opa(device,hardware.powered()?hardware.brightness()*255/100:0,0);lv_timer_handler();
+  auto now=SDL_GetTicks();lv_tick_inc(smoke?20:now-last);last=now;ui.update();if(studio&&selectorFace!=ui.faceDesign())refreshDesignSelector();lv_obj_set_style_opa(device,hardware.powered()?hardware.outputBrightness()*255/100:0,0);lv_timer_handler();
   std::string summary=std::string(game.state().active?"MATCH IN PROGRESS":"NO ACTIVE MATCH")+"\nPlayers   "+std::to_string(game.state().playerCount)+"\nLife   "+std::to_string(game.player().life)+"\nPoison   "+std::to_string(game.player().counters[0])+" / "+std::to_string(game.state().poisonLimit)+"\nSources   "+std::to_string(game.state().sources.size())+"\nUndoable actions   "+std::to_string(game.historyCursor());
   if(summary!=lv_label_get_text(stats))lv_label_set_text(stats,summary.c_str());
   SDL_UpdateTexture(texture,nullptr,pixels.data(),W*4);SDL_RenderClear(renderer);SDL_RenderCopy(renderer,texture,nullptr,nullptr);SDL_RenderPresent(renderer);

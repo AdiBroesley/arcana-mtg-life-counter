@@ -36,11 +36,24 @@ void AppUI::radialBack(Action action) {
 }
 void AppUI::buildTools() {
  if(view_==View::Gear) {
-  const char* titles[]{"New Game","Flip Coin","Roll","End Game","Brightness","Watch Face"};
-  const Action actions[]{AskReset,FlipCoin,RollD20,RequestEnd,OpenBrightness,OpenFaces};
+  const char* titles[]{"New Game","Flip Coin","Roll","End Game","Display","Watch Face"};
+  const Action actions[]{AskReset,FlipCoin,RollD20,RequestEnd,OpenDisplay,OpenFaces};
   const ToolIcon icons[]{ToolIcon::Reset,ToolIcon::Coin,ToolIcon::D20,ToolIcon::End,ToolIcon::Brightness,ToolIcon::WatchFace};
   const unsigned colors[]{red,gold,violet,red,teal,0x496c92};
   for(unsigned i=0;i<6;++i)radialSector(titles[i],i,6,actions[i],0,colors[i],icons[i]);
+ }else if(view_==View::Display) {
+  const auto& settings=profile_->displaySettings();
+  radialSector("Brightness",0,5,OpenBrightness,0,teal,ToolIcon::Brightness);
+  radialSector("Dim After",1,5,OpenDimDelay,0,0x326e88,ToolIcon::Brightness);
+  radialSector(std::string("Life Only: ")+(settings.lifeOnly?"ON":"OFF"),2,5,ToggleLifeOnly,0,settings.lifeOnly?0x159870:0x3c5261,ToolIcon::LifeLink);
+  radialSector(std::string("Wake Protection: ")+(settings.wakeProtection?"ON":"OFF"),3,5,ToggleWakeProtection,0,settings.wakeProtection?0x159870:0x3c5261,ToolIcon::Shield);
+  radialSector("Idle Brightness",4,5,OpenIdleBrightness,0,0x6d587d,ToolIcon::Brightness);
+  for(unsigned i=0;i<lv_obj_get_child_count(screen_);++i){auto* item=lv_obj_get_child(screen_,i);if(lv_obj_check_type(item,&lv_button_class)&&lv_obj_get_child_count(item)>1){auto* caption=lv_obj_get_child(item,1);lv_obj_set_style_text_font(caption,&tab_font,0);lv_obj_set_height(caption,30);lv_label_set_long_mode(caption,LV_LABEL_LONG_WRAP);}}
+ }else if(view_==View::DimDelay||view_==View::IdleBrightness){
+  bool delay=view_==View::DimDelay;auto* top=radialSector("",0,3,NoAction,0,0x326e88,ToolIcon::Brightness);lv_obj_clean(top);
+  label(screen_,delay?"DIM AFTER":"IDLE BRIGHTNESS",80,55,200,&lv_font_montserrat_14,ink);value_=label(screen_,"",95,85,170,&lv_font_montserrat_32,ink);
+  radialSector("+",1,3,Plus,0,teal,ToolIcon::Plus);radialSector("-",2,3,Minus,0,red,ToolIcon::Minus);
+  label(screen_,delay?"0 = Never / max 300 sec":"Capped at your selected brightness",70,296,220,&tab_font,ink);
  }else if(view_==View::FaceSelect) {
   unsigned first=facePage_*4,count=std::min<unsigned>(4,faceDesigns.size()-first);
   bool previous=facePage_>0,next=first+count<faceDesigns.size();unsigned sectors=count+previous+next;

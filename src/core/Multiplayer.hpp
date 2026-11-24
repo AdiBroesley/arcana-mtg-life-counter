@@ -14,6 +14,8 @@ public:
  const std::vector<LobbyInfo>& lobbies()const{return lobbies_;}std::vector<NetworkPlayer> players()const;
  std::vector<NetworkPlayer> opponents()const;const std::string& error()const{return error_;}const std::string& hostName()const{return hostName_;}
  std::uint64_t revision()const{return revision_;}unsigned capacity()const{return capacity_;}
+ bool selectRadio(PeerRadio radio){if(attached()||scanning_)return false;return transport_.selectRadio(radio);}
+ const char* connectionName()const{return transport_.description();}
 private:
  struct Command{std::uint64_t seq;std::int64_t life;std::array<std::int64_t,counterCount> counters;};
  void publish();void broadcast();void process(const PeerPacket& packet);void reconcile();bool apply(NetworkPlayer& player,const Command& command);void rememberLocal();void joinLobby(const LobbyInfo& lobby);

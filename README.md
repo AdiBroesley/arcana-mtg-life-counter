@@ -1,6 +1,8 @@
 # Arcana / MTG Life Counter
 
-**Version 0.16.3** - Twelve selectable watch faces, saved brightness, multi-format play and local-network multiplayer.
+**Version 0.17.0** - Configurable idle display and experimental Bluetooth LE multiplayer.
+
+Install [v0.17.0](https://github.com/michaelDengl/arcana-mtg-life-counter/releases/tag/v0.17.0) from the knob's **Update** button after checking for updates over Wi-Fi. Bluetooth remains experimental and has not yet been tested between physical knobs; Wi-Fi remains selectable for multiplayer and firmware updates.
 
 A native Windows digital twin of a round 360 x 360 knob display, with the same LVGL interface running on the ESP32-S3 knob. The app supports Commander, Classic, Commander 2HG, Brawl and Limited, with in-memory matches and a touch/rotary interface.
 
@@ -21,6 +23,24 @@ The Windows digital twin shares its game logic and LVGL interface with a **Guiti
 | --- | --- | --- | --- |
 | ![Startup](docs/previews/startup.png) | ![Setup](docs/previews/setup.png) | ![Life](docs/previews/watch-face.png) | ![Damage](docs/previews/ui-opponent.png) |
 
+## Idle display and connection settings
+
+Open **Gear > Display**. All five choices are saved independently of your match:
+
+| Setting | Default | Behaviour |
+| --- | --- | --- |
+| Brightness | Existing saved level | Normal display brightness, 0?100%. |
+| Dim After | 5 seconds | Encoder or +/- selects 1?300 seconds; 0 means Never. |
+| Life Only | OFF | On the own-life face, idle hides the artwork and shows only a centred life total on black, on all twelve faces. |
+| Wake Protection | OFF | OFF: the first touch or wheel turn wakes and acts immediately. ON: the first tap/initial wheel burst only wakes. Works even below 10% manual brightness. |
+| Idle Brightness | 10% | Idle backlight level, capped at the selected normal brightness. |
+
+A held wake touch with protection OFF keeps the usual five-life-per-second repeat. Incoming multiplayer life updates continue while Life Only is visible. Other menus keep their normal artwork while dimmed. Never disables both automatic dimming and the idle face. Black artwork on this IPS panel is primarily a visual feature; battery savings have not been measured.
+
+For multiplayer, choose **Multi ARCANA > name > Connection** before Host/Join. **Bluetooth** is the experimental default. **Wi-Fi** keeps the existing access-point transport and works with the previously installed Wi-Fi firmware. All participants must use the same connection mode. Changing the connection leaves the existing match untouched and is available before hosting/joining; live matches never migrate radios automatically. The digital twin uses its existing IPv4 LAN for either selection and does not emulate the physical BLE radio.
+
+BLE supports up to nine connected guests plus the host; additional game seats can still be tracked manually. Wi-Fi retains its previous limits. Internet setup and GitHub firmware updates always use Wi-Fi. See [implementation and validation notes](docs/ble-display-candidate.md).
+
 ## Watch faces and saved display settings
 
 Open **Gear > Watch Face** during a match. Browse the three radial pages using **Next** and **Previous**, then tap a design to apply it. A check mark identifies the current choice; **Back** returns to settings. Selection preserves life, counters, Undo history and multiplayer state, and remains selected after restart and new games.
@@ -33,12 +53,13 @@ Mana Confluence keeps all life, counter, multiplayer, Undo, battery and lethal-w
 
 ![Mana Confluence](docs/previews/mana-confluence.png)
 
-**Gear > Brightness** now remembers the selected level after restart. It saves once adjustments have settled for 750 ms, or immediately when leaving the screen. Automatic idle dimming still restores the user's selected level and does not overwrite it. Existing profiles retain their name/identity and start with Original; devices without a saved brightness retain their hardware default. At a saved **0%**, a clockwise turn restores **10%** without changing life.
+**Gear > Display > Brightness** now remembers the selected level after restart. It saves once adjustments have settled for 750 ms, or immediately when leaving the screen. Automatic idle dimming still restores the user's selected level and does not overwrite it. Existing profiles retain their name/identity and start with Original; devices without a saved brightness retain their hardware default. At a saved **0%**, a clockwise turn restores **10%** without changing life.
 
 The Windows Face Studio runs these same firmware renderers. Use the left selector or **[ / ]** to compare designs without resetting the demo match. Run `tools\run_simulator.bat` to open it.
 
 ## Latest UI updates
 
+- Firmware **v0.17.0** adds saved **Display** settings (Life Only OFF, Wake Protection OFF, five-second dim delay by default) and experimental **Bluetooth / Wi-Fi** multiplayer selection. Use **Connection > Wi-Fi** with earlier firmware. Bluetooth radio operation and battery savings still need a two-knob hardware test.
 - Firmware **v0.16.3** adds **Mana Confluence**, a five-mana-colour design with licensed mana glyphs, bronze trim, ivory life digits and a stained-glass centre. All previous faces remain visually unchanged.
 - Firmware **v0.16.2** introduced the six-section gear menu, paged Watch Face selector and persistent display settings. Existing OTA-enabled devices can install it from the startup **Update** button.
 - The name keyboard uses gentle curved rows. Green **OK** is above the name; **CHANGE** is an inset bottom button, and **Back** remains alone in the center.
@@ -78,7 +99,7 @@ Startup offers **New Game**, **Update** and **About**. Matches run entirely in m
 5. In Single Arcana, opponent tabs show incoming commander damage in Commander/2HG and the opponent's life in Classic/Brawl/Limited. Their round screens edit the corresponding value; central Back returns to P1. New games restore every tracked life total to the selected preset.
 6. Under **Gear > End Game**, confirm **End game** to finish the match and return to startup. Back cancels. Restarting or closing the application discards the current match.
 
-Life, counters, Undo/Redo history and live network membership are session-only. Restart Device starts a fresh session at startup. Your multiplayer device name, stable identity, watch face and selected brightness remain saved independently.
+Life, counters, Undo/Redo history and live network membership are session-only. Restart Device starts a fresh session at startup. Your multiplayer device name, stable identity, watch face, display settings and selected connection remain saved independently.
 
 ## Device updates and About
 
@@ -137,7 +158,7 @@ Choose different names, host on one, and join on the other. The default profile 
 
 Names persist across process restarts. Live lobby membership, host state and unacknowledged network edits are process-local: after shutdown, use Multi/Join to reconnect to a still-running host. There is no host migration or automatic lobby restoration after the host process closes. Reconnecting uses the running host's canonical state.
 
-On the Guition devices, choose **Multi ARCANA**, confirm your name, then **Host** or **Join**. Host creates an open 2.4 GHz ARCANA network after format/player confirmation. Join scans nearby ARCANA networks and lists their host names; tapping one connects and joins its game. No router, password or internet connection is required. Starting with empty seats and joining later use the same roster synchronization as the simulator. Back cancels a scan/join; ending or leaving the session turns off Wi-Fi. Single ARCANA keeps the radio off. All participating devices need this firmware update. The simulator continues to use the computer's existing LAN; see [firmware networking](firmware/README.md#multiplayer-and-remaining-hardware-work) for verification status and limits.
+On the Guition devices, choose **Multi ARCANA**, confirm your name, select **Connection > Wi-Fi**, then **Host** or **Join**. The Wi-Fi host creates an open 2.4 GHz ARCANA network after format/player confirmation. Join scans nearby ARCANA networks and lists their host names; tapping one connects and joins its game. No router, password or internet connection is required. Starting with empty seats and joining later use the same roster synchronization as the simulator. Back cancels a scan/join; ending or leaving the session turns off Wi-Fi. Single ARCANA keeps the radio off. All participating devices need this firmware update. The simulator continues to use the computer's existing LAN; see [firmware networking](firmware/README.md#multiplayer-and-remaining-hardware-work) for verification status and limits.
 
 The user completed a successful five-device multiplayer playtest on 2026-11-21, reporting about four hours of battery runtime. An owner-device power candidate adds CPU scaling, event-driven idle input, automatic light sleep and reduced idle network traffic while preserving the existing display/ring settings. See [power management and testing](firmware/README.md#idle-power-management-power-v1) and [battery-gauge findings](firmware/README.md#battery-sensing-investigation-2026-11-22). Single ARCANA light sleep and wake/input behavior are verified on the owner device. Battery-runtime improvement and cross-device sleep compatibility still need physical validation.
 
@@ -181,7 +202,7 @@ The main-face **Undo** reverses the entire group of game edits from the precedin
 
 ### Battery and brightness
 
-In Original and Ember Forge, the horizontal battery icon sits below the gear, mirrored against the heart above it; other watch faces arrange these indicators to suit their layout. Multi also displays your saved name above the upper heart/skull. The battery displays six bands: **0-5%, 6-20%, 21-40%, 41-60%, 61-80%, 81-100%**, plus charging and unknown states. The simulator uses an illustrative 75% reading; a hardware adapter must provide real telemetry. On the Guition device, the screen dims to 10% after five idle seconds and restores the selected brightness on wake. The wake touch or initial wheel burst is consumed to prevent accidental edits. Selected levels of 10% or less stay unchanged. Battery-runtime improvement has not been measured.
+In Original and Ember Forge, the horizontal battery icon sits below the gear, mirrored against the heart above it; other watch faces arrange these indicators to suit their layout. Multi also displays your saved name above the upper heart/skull. The battery displays six bands: **0-5%, 6-20%, 21-40%, 41-60%, 61-80%, 81-100%**, plus charging and unknown states. The simulator uses an illustrative 75% reading; a hardware adapter must provide real telemetry. The default idle policy dims to at most 10% after five seconds and restores the selected brightness on wake. Wake Protection defaults OFF; enable it to consume the wake tap or initial wheel burst. Low manual brightness still observes idle/wake settings without becoming brighter. Dim After and Idle Brightness are configurable; battery-runtime improvement has not been measured.
 
 The physical RGB ring receives a uniform frame covering up to 64 LEDs, including longer ring revisions: **green at 30% battery or above, red below 30%**. Green uses 5/255 channel drive (about 2%); red uses 5/255 (about 2%). Extra pixel data is ignored by shorter chains. It stays off while USB power or an unavailable reading prevents a reliable battery estimate. The ring follows the same approximate battery estimate as the screen. It has no animation, updates only when the selected colour changes, and is independent of screen brightness. The extra battery consumption has not been measured.
 
@@ -246,7 +267,7 @@ The right panel provides encoder buttons, logical power, restart and new-game se
 
 ## Tests and scope
 
-`tools\run_tests.bat` runs eleven suites: game rules, in-memory state snapshots, interrupted device-profile storage recovery, idle-backlight policy/timing statistics, firmware release compatibility, multiplayer protocol/profile behavior, real UDP discovery/sync, separate host/client processes, round-screen UI, SDL smoke and fresh startup across separate processes. Coverage includes all five formats; 2-6 teams and all twelve seats; startup update availability/About/contact navigation and cancelled setup; independent opponent life and commander damage; linked-life corrections; poison thresholds; retained counters; snapshot validation; corrupt profile-slot fallback; bounded Undo/Redo and five-second groups; battery bands; curved touch targets; pooled Undo glyphs; twelve shared watch-face layouts and their real selector; persistent appearance settings, legacy-profile migration and zero-brightness recovery; single-cover fade timing; persistent device identities; keyboard/host/join flows; duplicate and lost packets; rapid-edit coalescing; simultaneous teammate edits; and host/client discovery between separate processes. Screenshots are generated in `build/ui-*.bmp` and `build/simulator-*.bmp`. The separate `tests/firmware_tools_tests.py` checks that the installer rejects altered, incomplete and wrong-device factory backups without accessing hardware.
+`tools\run_tests.bat` runs twelve suites: game rules, in-memory state snapshots, interrupted device-profile storage recovery, idle-backlight policy/timing statistics, BLE framing/radio fallback, firmware release compatibility, multiplayer protocol/profile behavior, real UDP discovery/sync, separate host/client processes, round-screen UI, SDL smoke and fresh startup across separate processes. Coverage includes all five formats; 2-6 teams and all twelve seats; startup update availability/About/contact navigation and cancelled setup; independent opponent life and commander damage; linked-life corrections; poison thresholds; retained counters; snapshot validation; corrupt profile-slot fallback; bounded Undo/Redo and five-second groups; battery bands; curved touch targets; pooled Undo glyphs; twelve shared watch-face layouts and their real selector; persistent appearance settings, legacy-profile migration and zero-brightness recovery; single-cover fade timing; persistent device identities; keyboard/host/join flows; duplicate and lost packets; rapid-edit coalescing; simultaneous teammate edits; and host/client discovery between separate processes. Screenshots are generated in `build/ui-*.bmp` and `build/simulator-*.bmp`. The separate `tests/firmware_tools_tests.py` checks that the installer rejects altered, incomplete and wrong-device factory backups without accessing hardware.
 
 Commander tabs track incoming damage. Classic, Brawl and Limited tabs track opponents' life. Commander 2HG shares life and poison within your team while keeping incoming commander damage separate by recipient. Desktop side panels are simulator controls; device screens use the same LVGL code. The separate firmware target and current physical validation boundary are documented in [firmware/README.md](firmware/README.md).
 

@@ -183,4 +183,14 @@ void AppUI::refreshFaceLayout(){
  for(unsigned side=0;side<2;++side){auto* count=side?poison_:aux_;auto number=std::to_string(game_.player().counters[static_cast<unsigned>(game_.state().shortcuts[side])]);text(count,number);int width=l.counters[side].icon.w-33;const auto* font=lv_text_get_width(number.c_str(),static_cast<uint32_t>(number.size()),&lv_font_montserrat_14,0)>width?&tab_font:&lv_font_montserrat_14;textFont(count,font);lv_obj_set_height(count,font->line_height);lv_obj_set_y(count,(l.counters[side].icon.h-font->line_height)/2);}
  if(conceptBatteryState_!=batteryState_){conceptBatteryState_=batteryState_;lv_obj_update_layout(battery_);for(unsigned i=0;i<lv_obj_get_child_count(battery_);++i){auto* item=lv_obj_get_child(battery_,i);if(lv_obj_check_type(item,&lv_label_class))textColor(item,lv_color_hex(p.ink));else if(lv_obj_get_width(item)==24){lv_obj_set_style_bg_color(item,lv_color_hex(p.surface),0);lv_obj_set_style_border_color(item,lv_color_hex(p.ink),0);}else if(lv_obj_get_x(item)==24)lv_obj_set_style_bg_color(item,lv_color_hex(p.ink),0);}}
 }
+void AppUI::buildIdleDial(){
+ for(unsigned side=0;side<2;++side){auto* half=box(screen_,180*side,0,180,360,0);lv_obj_set_style_bg_opa(half,0,0);lv_obj_set_style_radius(half,0,0);bindings_.push_back({this,side?Plus:Minus,side});lv_obj_add_event_cb(half,lifeTouch,LV_EVENT_ALL,&bindings_.back());}
+ value_=label(screen_,"",0,0,0,&mana_life_digits,faceDesigns[faceDesign_].ink);
+}
+void AppUI::refreshIdleDial(){
+ auto number=std::to_string(game_.player().life);FaceRect r{34,116,292,128};const lv_font_t* font=&tab_font;
+ for(const auto* candidate:{&mana_life_digits,&life_digits,&lv_font_montserrat_48,&lv_font_montserrat_32,&lv_font_montserrat_20,&tab_font})if(candidate->line_height<=r.h-2&&lv_text_get_width(number.c_str(),static_cast<uint32_t>(number.size()),candidate,0)<=r.w-6){font=candidate;break;}
+ fitText(value_,number,r,font,faceDesigns[faceDesign_].ink,1);
+}
+
 }

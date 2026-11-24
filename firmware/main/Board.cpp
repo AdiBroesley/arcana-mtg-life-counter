@@ -29,6 +29,7 @@ bool Board::transferDone(esp_lcd_panel_io_handle_t,esp_lcd_panel_io_event_data_t
 void Board::setBrightness(unsigned value) {
  backlight_.setBrightness(value,esp_timer_get_time()/1000);applyBacklight();
 }
+void Board::setDisplaySettings(const DisplaySettings& value){backlight_.configure(value,esp_timer_get_time()/1000);applyBacklight();}
 void Board::applyBacklight(){
  auto value=backlight_.output();if(value==appliedBrightness_)return;
  ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE,LEDC_CHANNEL_0,value*1023/100));

@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include "DisplaySettings.hpp"
 namespace mtg {
 struct PeerPacket {std::string endpoint,data;};
 struct PeerNetwork {std::string id,name;};
@@ -15,5 +16,7 @@ public:virtual ~IPeerTransport()=default;virtual bool send(const std::string& en
  virtual bool radioDiscovery()const{return false;}
  virtual bool networkReady()const{return true;}
  virtual std::vector<PeerNetwork> networks()const{return {};}
+ virtual bool selectRadio(PeerRadio){return true;}
+ virtual const char* description()const{return "LAN simulation";}
 };
 }

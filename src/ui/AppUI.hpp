@@ -24,6 +24,7 @@ public:
  unsigned faceDesign()const{return faceDesign_;}
  FaceLayout faceLayoutGeometry()const{return redesignedFace(faceDesign_)?activeFaceLayout_:mtg::faceLayout(faceDesign_);}
  bool faceControlsFit()const;
+ bool lifeOnlyIdle()const{return idleLifeView_;}
  struct RenderTrial {unsigned phase;std::uint64_t micros;};
  // USB-only controlled comparison. Requires the single-player main life face.
  std::vector<RenderTrial> benchmarkUndoDrawing();
@@ -34,10 +35,12 @@ private:
  std::array<lv_obj_t*,2> layoutLifeTargets_{};
  std::vector<lv_obj_t*> layoutControls_;
  unsigned faceDesign_=0,facePage_=0;int conceptBatteryState_=-2;
- void saveBrightness();
+ void saveBrightness();void saveDisplayDraft();void applyDisplaySettings(const DisplaySettings& value);
+ void buildIdleDial();void refreshIdleDial();
+ bool idleLifeView_=false;unsigned displayDraft_=5;
  unsigned observedBrightness_=100;std::uint32_t brightnessChangedAt_=0;bool brightnessPending_=false;
- enum class View { FaceSelect, ContactCode, About, Updates, WifiSetup, Startup, ArcanaMode, NameSetup, HostJoin, BrowseGames, NetworkLobby, FormatSelect, PlayerSetup, EndConfirm, Gear, Brightness, ResetConfirm, CoinResult, RollResult, CounterPicker, Home, Menu, Counter, Sources, Damage, Commanders, Casts, Profiles, Status, History, Rename, AddSource, Threshold };
- enum Action { OpenFaces,ChooseFace,FacePage,ContactLink, OpenAbout, OpenUpdates, CheckUpdate, InstallUpdate, SetupWifi, SingleArcana,MultiArcana,NameKey,NameChange,NameDelete,NameSpace,NameSymbols,NameConfirm,HostGame,FindGames,JoinGame,RefreshGames,NextGames,StartNetwork, ToggleRecipient, ChooseFormat, NoAction, OpenBrightness, ToolBack, SideStep, OpenPicker, ChooseShortcut, RecentUndo, OpenGear, AskReset, ResetYes, ResetNo, FlipCoin, RollD20, NewGame, ConfirmPlayers, SelectPlayer, CycleSource, CloseDial, RequestEnd, FinishGame, CancelEnd, Back, Menu, Minus, Plus, OpenCounter, OpenSources, OpenOwn, OpenProfiles, OpenStatus,
+ enum class View { Display, DimDelay, IdleBrightness, Connection, FaceSelect, ContactCode, About, Updates, WifiSetup, Startup, ArcanaMode, NameSetup, HostJoin, BrowseGames, NetworkLobby, FormatSelect, PlayerSetup, EndConfirm, Gear, Brightness, ResetConfirm, CoinResult, RollResult, CounterPicker, Home, Menu, Counter, Sources, Damage, Commanders, Casts, Profiles, Status, History, Rename, AddSource, Threshold };
+ enum Action { OpenDisplay,OpenDimDelay,OpenIdleBrightness,ToggleLifeOnly,ToggleWakeProtection,OpenConnection,ChooseConnection,OpenFaces,ChooseFace,FacePage,ContactLink, OpenAbout, OpenUpdates, CheckUpdate, InstallUpdate, SetupWifi, SingleArcana,MultiArcana,NameKey,NameChange,NameDelete,NameSpace,NameSymbols,NameConfirm,HostGame,FindGames,JoinGame,RefreshGames,NextGames,StartNetwork, ToggleRecipient, ChooseFormat, NoAction, OpenBrightness, ToolBack, SideStep, OpenPicker, ChooseShortcut, RecentUndo, OpenGear, AskReset, ResetYes, ResetNo, FlipCoin, RollD20, NewGame, ConfirmPlayers, SelectPlayer, CycleSource, CloseDial, RequestEnd, FinishGame, CancelEnd, Back, Menu, Minus, Plus, OpenCounter, OpenSources, OpenOwn, OpenProfiles, OpenStatus,
   OpenHistory, Undo, Redo, Apply, Mode, NewSource, CreateSource, NewOwn, NewTurn, Rename,
   Append, Delete, SaveName, Limit, ToggleCounter, Source, Own, ToggleStatus, Day };
  struct Binding { AppUI* ui; Action action; std::uint32_t arg; double sectorStart=0,sectorSpan=0; };
