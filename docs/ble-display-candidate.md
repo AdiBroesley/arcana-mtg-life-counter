@@ -50,3 +50,15 @@ Before treating BLE as hardware-validated, use two updated knobs: host with empt
 ## Release distribution
 
 The version tag uses the repository's existing firmware-release workflow to build and package a fresh image, JSON manifest and SHA-256 checksums. These release-build bytes can differ from the locally built candidate above. GitHub's firmware asset digest and size are checked against the uploaded binary before publishing, and the latest-release endpoint is verified afterward. Publishing as the latest regular release is required for compatibility with the existing updater; the Bluetooth feature remains explicitly experimental.
+
+## v0.17.1 wake protection correction
+
+v0.17.1 is distributed through the existing knob updater. Physical-device confirmation remains pending.
+
+A slow full-face redraw after leaving Life Only can delay delivery of wheel pulses past the old 250 ms wake-guard deadline. The old policy classified them by delivery time, so movement from the same protected gesture could change life when the screen returned. A new regression test reproduced this before the fix.
+
+The board now keeps the first and latest physical sample times for each wheel batch, separately from its existing latency timestamp. Wake protection classifies the batch from those acquisition times and extends the protected burst from its latest physical pulse. A genuinely separate gesture after a quiet gap is still accepted without an extra delay. Net-zero wheel motion remains visible as physical activity, so a reversing gesture wakes the screen without editing life.
+
+The digital twin now queues wheel input until the UI consumes it, matching the board instead of filtering it immediately when sampled. Tests cover protected wake taps and complete held touches, queued pulses across a simulated 400 ms rendering delay, subsequent deliberate gestures, low and normal brightness, and net-zero motion across all twelve watch faces. Wake Protection OFF still applies the first input. Defaults and saved-profile format are unchanged. Physical-device confirmation remains separate from these software tests.
+
+Local v0.17.1 validation: all 12 native suites passed, including the regression that failed before the fix. The ESP-IDF 5.5 firmware build returned exit code 0. The verified local candidate is `build/candidates/v0.17.1/arcana-jc3636k718.bin` (2,250,672 bytes), SHA-256 `bc6de4d675d8856f074edde1f9f54603e50204b7987e571caa98aeb28f52187e`. This records local validation before publication; no device was physically flashed. Public release-build bytes may differ from this local candidate. Use the released manifest and SHA256SUMS for the downloadable image.

@@ -114,10 +114,10 @@ void Board::pollIdle(){
 std::int64_t Board::takeRotation(){
  rotationConsumedAt_=0;
  portENTER_CRITICAL(&knobMux_);auto batch=rotation_.take();portEXIT_CRITICAL(&knobMux_);
- if(!batch.delta)return 0;
+ if(!batch.hasInput)return 0;
  auto now=esp_timer_get_time();
  if(profiler_)profiler_->add(Profiler::WheelQueue,now-batch.sampledAt);
- bool deliver=backlight_.rotation(now/1000);applyBacklight();
+ bool deliver=backlight_.rotation(now/1000,batch.firstSampledAt/1000,batch.lastSampledAt/1000);applyBacklight();
  if(deliver)rotationConsumedAt_=batch.sampledAt;
  return deliver?batch.delta:0;
 }

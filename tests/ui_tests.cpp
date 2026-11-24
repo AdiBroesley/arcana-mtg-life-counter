@@ -418,6 +418,26 @@ int main() {
  hardware.setBrightness(5);tick(360);idleLife=game.player().life;clickAt(245,180);check(game.player().life==idleLife&&!rebootUI.lifeOnlyIdle(),"protected first tap wakes without editing at low brightness");
  clickAt(245,180);check(game.player().life==idleLife+1,"next tap after protected wake works normally");
  hardware.setBrightness(5);tick(360);idleLife=game.player().life;rotate(2);check(game.player().life==idleLife&&!rebootUI.lifeOnlyIdle(),"protected first wheel burst only wakes");tick(20);rotate(1);check(game.player().life==idleLife+1,"later independent wheel gesture edits normally");
+ // Match the board's deferred wheel filtering and exercise both protected
+ // input types across every renderer, including slow full-face restoration.
+ for(unsigned design=0;design<mtg::faceDesigns.size();++design){
+  rebootUI.setFaceDesign(design);tick(15);hardware.setBrightness(design%2?70:5);tick(360);
+  auto protectedState=game.serialize();clickAt(245,180);
+  check(game.serialize()==protectedState&&!rebootUI.lifeOnlyIdle()&&find(lv_screen_active(),LV_SYMBOL_SETTINGS),"every face consumes the protected wake tap without opening a menu");
+  auto life=game.player().life;rotate(1);check(game.player().life==life+1,"a separate wheel action works after a protected tap");
+  hardware.setBrightness(design%2?70:5);tick(360);protectedState=game.serialize();
+  hardware.setTouch({245,180,true});tick(130);hardware.setTouch({245,180,false});tick(6);
+  check(game.serialize()==protectedState&&!rebootUI.lifeOnlyIdle(),"every face consumes the entire held wake touch and its release");
+  hardware.setBrightness(design%2?70:5);tick(360);life=game.player().life;rotate(1);
+  check(game.player().life==life&&!rebootUI.lifeOnlyIdle(),"protected wheel wake starts before redraw backlog on every face");
+  lv_tick_inc(80);hardware.updateIdle(lv_tick_get());hardware.rotate(1);
+  lv_tick_inc(80);hardware.updateIdle(lv_tick_get());hardware.rotate(1);
+  lv_tick_inc(400);tick();
+  check(game.player().life==life,"wake wheel pulses queued during the Life Only redraw remain protected on every face");
+  tick(20);rotate(-1);check(game.player().life==life-1,"a fresh gesture after redraw protection applies exactly once");
+  hardware.setBrightness(5);tick(360);life=game.player().life;hardware.rotate(1);hardware.rotate(-1);tick();
+  check(game.player().life==life&&!rebootUI.lifeOnlyIdle(),"net-zero physical wheel activity still wakes the minimal face safely");
+ }
  hardware.setBrightness(50);click(LV_SYMBOL_SETTINGS);click("Display");click("Dim After");rotate(-1000);check(find(lv_screen_active(),"Never"),"zero idle delay is displayed as Never");click("Back");click("Back");click("Back");tick(800);check(!hardware.idle()&&!rebootUI.lifeOnlyIdle(),"Never keeps normal face active");
  lv_deinit();std::cout<<"All round-screen counter interaction checks passed\n";
 }

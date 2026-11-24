@@ -1,8 +1,8 @@
 # Arcana / MTG Life Counter
 
-**Version 0.17.0** - Configurable idle display and experimental Bluetooth LE multiplayer.
+**Version 0.17.1** - Fixes queued wake input when Life Only and Wake Protection are enabled; includes configurable idle display and experimental Bluetooth LE multiplayer.
 
-Install [v0.17.0](https://github.com/michaelDengl/arcana-mtg-life-counter/releases/tag/v0.17.0) from the knob's **Update** button after checking for updates over Wi-Fi. Bluetooth remains experimental and has not yet been tested between physical knobs; Wi-Fi remains selectable for multiplayer and firmware updates.
+Install [v0.17.1](https://github.com/michaelDengl/arcana-mtg-life-counter/releases/tag/v0.17.1) from the knob's **Update** button after checking for updates over Wi-Fi. Bluetooth remains experimental and has not yet been tested between physical knobs; Wi-Fi remains selectable for multiplayer and firmware updates.
 
 A native Windows digital twin of a round 360 x 360 knob display, with the same LVGL interface running on the ESP32-S3 knob. The app supports Commander, Classic, Commander 2HG, Brawl and Limited, with in-memory matches and a touch/rotary interface.
 
@@ -59,6 +59,7 @@ The Windows Face Studio runs these same firmware renderers. Use the left selecto
 
 ## Latest UI updates
 
+- Firmware **v0.17.1** fixes wheel clicks escaping Wake Protection while the full face redraws after Life Only. Queued input is classified using physical sampling times; a fresh gesture after a pause still works immediately. Regression tests cover protected taps, held touches, delayed wheel batches and net-zero motion on all twelve faces.
 - Firmware **v0.17.0** adds saved **Display** settings (Life Only OFF, Wake Protection OFF, five-second dim delay by default) and experimental **Bluetooth / Wi-Fi** multiplayer selection. Use **Connection > Wi-Fi** with earlier firmware. Bluetooth radio operation and battery savings still need a two-knob hardware test.
 - Firmware **v0.16.3** adds **Mana Confluence**, a five-mana-colour design with licensed mana glyphs, bronze trim, ivory life digits and a stained-glass centre. All previous faces remain visually unchanged.
 - Firmware **v0.16.2** introduced the six-section gear menu, paged Watch Face selector and persistent display settings. Existing OTA-enabled devices can install it from the startup **Update** button.

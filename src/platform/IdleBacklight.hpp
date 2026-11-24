@@ -24,9 +24,12 @@ public:
   if(!pressed)ignoreTouch_=false;
   return deliver;
  }
- bool rotation(std::uint64_t now){
+ bool rotation(std::uint64_t now){return rotation(now,now,now);}
+ bool rotation(std::uint64_t now,std::uint64_t firstSampledAt,std::uint64_t lastSampledAt){
   bool waking=dimmed_;activity(now);
-  if(settings_.wakeProtection&&(waking||(wheelGuardUntil_&&now<wheelGuardUntil_))){wheelGuardUntil_=now+250;return false;}
+  // Classify queued pulses by acquisition time, not delayed UI consumption.
+  // A batch beginning in the protected burst stays protected after a redraw.
+  if(settings_.wakeProtection&&(waking||(wheelGuardUntil_&&firstSampledAt<wheelGuardUntil_))){wheelGuardUntil_=std::max(wheelGuardUntil_,lastSampledAt+250);return false;}
   wheelGuardUntil_=0;return true;
  }
 private:

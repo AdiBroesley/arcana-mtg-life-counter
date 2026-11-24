@@ -1,6 +1,6 @@
 # ARCANA on Guition JC3636K718
 
-**v0.17.0:** adds saved idle-display controls and experimental NimBLE multiplayer. It is distributed through [GitHub Releases](https://github.com/michaelDengl/arcana-mtg-life-counter/releases/tag/v0.17.0) and the knob's **Update** button. No two-knob BLE test or battery measurement has been performed; use the retained Wi-Fi option with earlier firmware. See [implementation and validation notes](../docs/ble-display-candidate.md).
+**v0.17.1:** fixes delayed wake-wheel input escaping protection while restoring the Life Only screen; includes v0.17.0 saved idle-display controls and experimental NimBLE multiplayer. Install [v0.17.1](https://github.com/michaelDengl/arcana-mtg-life-counter/releases/tag/v0.17.1) through the knob's **Update** menu. No two-knob BLE test or battery measurement has been performed; use the retained Wi-Fi option with earlier firmware. See [implementation and validation notes](../docs/ble-display-candidate.md).
 
 For existing Wi-Fi knobs select **Multi ARCANA > confirm name > Connection > Wi-Fi** before Host/Join. Updates continue to use Wi-Fi regardless of the game connection setting.
 

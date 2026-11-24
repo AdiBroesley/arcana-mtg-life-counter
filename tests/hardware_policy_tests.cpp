@@ -47,6 +47,16 @@ int main(){try{
  mtg::DisplaySettings custom;custom.dimAfterSeconds=12;custom.idleBrightness=3;immediate.configure(custom,11000);immediate.setBrightness(80,11000);immediate.tick(22999);check(!immediate.dimmed(),"Custom delay respected");immediate.tick(23000);check(immediate.output()==3,"Custom idle brightness respected");
  custom.dimAfterSeconds=0;immediate.configure(custom,24000);immediate.tick(999999);check(!immediate.dimmed()&&immediate.output()==80,"Never disables idle dimming");
  custom.dimAfterSeconds=1;custom.wakeProtection=true;immediate.configure(custom,1000000);immediate.setBrightness(4,1000000);immediate.tick(1001000);check(!immediate.touch(1001001,true)&&!immediate.touch(1001002,false),"Wake protection applies even below 10 percent");
+ mtg::IdleBacklight delayed;delayed.configure(protectedWake,0);delayed.tick(5000);
+ check(!delayed.rotation(5010,5000,5005),"First queued wake batch is suppressed");
+ check(!delayed.rotation(5700,5100,5250),"A continuous wake burst queued during redraw stays suppressed after the processing-time deadline");
+ check(!delayed.rotation(6000,5300,5490),"Delayed protected batches extend the guard using the latest physical pulse");
+ check(delayed.rotation(6100,5800,5805),"A genuinely separate gesture after a physical pause is accepted even if processed late");
+ mtg::EncoderBatch cancelled;cancelled.add(1,100);cancelled.add(-1,180);auto zero=cancelled.take();
+ check(zero.hasInput&&zero.delta==0&&zero.firstSampledAt==100&&zero.lastSampledAt==180,"Net-zero batches retain physical activity for wake protection");
+ check(!cancelled.take().hasInput,"Taking a batch clears physical activity too");
+ cancelled.add(1,1000);cancelled.add(-1,1100);cancelled.add(1,1400);auto bounds=cancelled.take();
+ check(bounds.firstSampledAt==1000&&bounds.lastSampledAt==1400&&bounds.sampledAt==1400,"Physical gesture bounds coexist with the existing net-pulse latency timestamp");
  mtg::TimingStats stats;check(stats.percentile(95)==0,"Empty metric");for(unsigned i=1;i<=100;++i)stats.add(i);
  check(stats.count()==100&&stats.mean()==50&&stats.percentile(50)==50&&stats.percentile(95)==95&&stats.maximum()==100,"Timing summary incorrect");
  for(unsigned i=0;i<128;++i)stats.add(200);check(stats.percentile(95)==200&&stats.maximum()==200,"Rolling percentile incorrect");
