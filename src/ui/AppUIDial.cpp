@@ -93,13 +93,21 @@ void AppUI::buildLifecycle() {
  if(view_==View::Startup) {
   label(screen_,"A R C A N A",65,67,230,&lv_font_montserrat_20,violet);
   label(screen_,"LIFE COUNTER",55,103,250,&lv_font_montserrat_14,muted);
-  if(canResume()) {
+  if(canResume()||exitHandler_) {
    // A saved match survived a reset: offer it first, keep New Game one tap away.
-   button(screen_,"Resume Game",83,138,194,44,ResumeGame);
-   newGameButton_=button(screen_,"New Game",83,190,194,40,NewGame);
-   updateButton_=button(screen_,"Update",70,240,107,36,OpenUpdates);
-   button(screen_,"About",183,240,107,36,OpenAbout);
-   detail_=label(screen_,"",70,288,220,&lv_font_montserrat_14,muted);
+   // Inside a launcher, "Apps" joins the bottom row.
+   int y=canResume()?138:150;
+   if(canResume()){button(screen_,"Resume Game",83,y,194,44,ResumeGame);y+=52;}
+   newGameButton_=button(screen_,"New Game",83,y,194,canResume()?40:44,NewGame);y+=canResume()?50:56;
+   if(exitHandler_){
+    updateButton_=button(screen_,"Update",58,y,78,36,OpenUpdates);
+    button(screen_,"About",141,y,78,36,OpenAbout);
+    button(screen_,"Apps",224,y,78,36,OpenApps);
+   }else {
+    updateButton_=button(screen_,"Update",70,y,107,36,OpenUpdates);
+    button(screen_,"About",183,y,107,36,OpenAbout);
+   }
+   detail_=label(screen_,"",70,y+48,220,&lv_font_montserrat_14,muted);
   }else {
    newGameButton_=button(screen_,"New Game",83,145,194,44,NewGame);
    updateButton_=button(screen_,"Update",83,202,194,40,OpenUpdates);

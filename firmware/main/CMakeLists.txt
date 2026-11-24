@@ -1,6 +1,6 @@
 set(APP_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 idf_component_register(
- SRCS main.cpp Board.cpp FlashStorage.cpp Wifi.cpp Bluetooth.cpp FirmwareUpdate.cpp
+ SRCS main.cpp ArcanaApp.cpp Board.cpp FlashStorage.cpp Wifi.cpp Bluetooth.cpp FirmwareUpdate.cpp
   "${APP_ROOT}/src/core/GameState.cpp"
   "${APP_ROOT}/src/core/Serialization.cpp"
   "${APP_ROOT}/src/core/RandomTools.cpp"

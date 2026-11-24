@@ -129,6 +129,7 @@ void AppUI::handle(Action action,std::uint32_t arg) {
    // Radio bursts on a nearly empty cell can brown out the board mid-game.
    if(lowBatteryForRadio()&&!lowBatteryWarned_){lowBatteryWarned_=true;rebuild_=true;break;}
    lowBatteryWarned_=false;nameDraft_=profile_->name();nameSymbols_=false;navigate(View::NameSetup);break;
+  case OpenApps:if(exitHandler_){if(updates_)updates_->cancel();exitHandler_();}break;
   case ResumeGame:
    if(!resumeData_.empty()&&game_.deserialize(resumeData_)){resumeData_.clear();goHome();}
    else {resumeData_.clear();rebuild_=true;}

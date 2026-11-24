@@ -8,6 +8,7 @@
 #include "platform/IStorage.hpp"
 #include "Widgets/ToolIcons.hpp"
 #include <deque>
+#include <functional>
 #include "FaceLayouts.hpp"
 namespace mtg {
 class AppUI {
@@ -32,6 +33,8 @@ public:
  // not saved. Multiplayer matches are not saved.
  void setMatchStorage(IStorage* storage);
  bool canResume()const{return !resumeData_.empty();}
+ // Launcher firmware: show "Apps" on the start screen and call this when tapped.
+ void setExitHandler(std::function<void()> handler){exitHandler_=std::move(handler);if(view_==View::Startup)rebuild_=true;}
  static constexpr std::uint32_t autosaveDelayMs=2000;
  // Starting multiplayer below this battery level asks for a second tap first.
  static constexpr unsigned lowBatteryRadioPercent=5;
@@ -50,7 +53,7 @@ private:
  bool idleLifeView_=false;unsigned displayDraft_=5;
  unsigned observedBrightness_=100;std::uint32_t brightnessChangedAt_=0;bool brightnessPending_=false;
  enum class View { Display, DimDelay, IdleBrightness, Connection, FaceSelect, ContactCode, About, Updates, WifiSetup, Startup, ArcanaMode, NameSetup, HostJoin, BrowseGames, NetworkLobby, FormatSelect, PlayerSetup, EndConfirm, Gear, Brightness, ResetConfirm, CoinResult, RollResult, CounterPicker, Home, Menu, Counter, Sources, Damage, Commanders, Casts, Profiles, Status, History, Rename, AddSource, Threshold };
- enum Action { ResumeGame,OpenDisplay,OpenDimDelay,OpenIdleBrightness,ToggleLifeOnly,ToggleWakeProtection,OpenConnection,ChooseConnection,OpenFaces,ChooseFace,FacePage,ContactLink, OpenAbout, OpenUpdates, CheckUpdate, InstallUpdate, SetupWifi, SingleArcana,MultiArcana,NameKey,NameChange,NameDelete,NameSpace,NameSymbols,NameConfirm,HostGame,FindGames,JoinGame,RefreshGames,NextGames,StartNetwork, ToggleRecipient, ChooseFormat, NoAction, OpenBrightness, ToolBack, SideStep, OpenPicker, ChooseShortcut, RecentUndo, OpenGear, AskReset, ResetYes, ResetNo, FlipCoin, RollD20, NewGame, ConfirmPlayers, SelectPlayer, CycleSource, CloseDial, RequestEnd, FinishGame, CancelEnd, Back, Menu, Minus, Plus, OpenCounter, OpenSources, OpenOwn, OpenProfiles, OpenStatus,
+ enum Action { OpenApps,ResumeGame,OpenDisplay,OpenDimDelay,OpenIdleBrightness,ToggleLifeOnly,ToggleWakeProtection,OpenConnection,ChooseConnection,OpenFaces,ChooseFace,FacePage,ContactLink, OpenAbout, OpenUpdates, CheckUpdate, InstallUpdate, SetupWifi, SingleArcana,MultiArcana,NameKey,NameChange,NameDelete,NameSpace,NameSymbols,NameConfirm,HostGame,FindGames,JoinGame,RefreshGames,NextGames,StartNetwork, ToggleRecipient, ChooseFormat, NoAction, OpenBrightness, ToolBack, SideStep, OpenPicker, ChooseShortcut, RecentUndo, OpenGear, AskReset, ResetYes, ResetNo, FlipCoin, RollD20, NewGame, ConfirmPlayers, SelectPlayer, CycleSource, CloseDial, RequestEnd, FinishGame, CancelEnd, Back, Menu, Minus, Plus, OpenCounter, OpenSources, OpenOwn, OpenProfiles, OpenStatus,
   OpenHistory, Undo, Redo, Apply, Mode, NewSource, CreateSource, NewOwn, NewTurn, Rename,
   Append, Delete, SaveName, Limit, ToggleCounter, Source, Own, ToggleStatus, Day };
  struct Binding { AppUI* ui; Action action; std::uint32_t arg; double sectorStart=0,sectorSpan=0; };
@@ -135,6 +138,7 @@ private:
  IStorage* matchStorage_=nullptr;std::string resumeData_;
  std::uint64_t savedRevision_=0;std::uint32_t saveDueAt_=0;bool saveDue_=false,savedActive_=false;
  bool lowBatteryWarned_=false;
+ std::function<void()> exitHandler_;
  void autosaveMatch();
  bool lowBatteryForRadio()const;
  std::uint32_t transitionStarted_=0,transitionFrame_=0;

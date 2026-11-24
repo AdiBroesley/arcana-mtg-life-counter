@@ -467,7 +467,16 @@ int main() {
   screenshot("ui-multiplayer-low-battery.bmp");
   click("BATTERY BELOW 5%\nTAP AGAIN");check(!find(lv_screen_active(),"MULTI ARCANA")&&!find(lv_screen_active(),"SINGLE ARCANA"),"a second tap continues to multiplayer setup");
   hardware.setBattery(50);cleanBoot.endGame();damagedUI.showStartup();tick(5);click("New Game");tick(5);click("MULTI ARCANA");check(!find(lv_screen_active(),"MULTI ARCANA")&&!find(lv_screen_active(),"BATTERY BELOW 5%\nTAP AGAIN"),"with enough battery multiplayer opens directly");
-  hardware.setBattery(75);app=&ui;
+  hardware.setBattery(75);
+  mtg::GameState standalone;mtg::AppUI standaloneUI(standalone,hardware,device,random);app=&standaloneUI;standaloneUI.showStartup();tick(5);
+  check(!find(lv_screen_active(),"Apps"),"standalone ARCANA has no Apps button");
+  bool exited=false;ProfileMemory launcherSave;
+  {mtg::GameState g;g.startNewGame(4);g.adjustLife(-2);launcherSave.value=g.serializeSnapshot();}
+  mtg::GameState launched;mtg::AppUI launchedUI(launched,hardware,device,random);app=&launchedUI;launchedUI.setMatchStorage(&launcherSave);launchedUI.setExitHandler([&]{exited=true;});launchedUI.showStartup();tick(5);
+  check(find(lv_screen_active(),"Apps")&&find(lv_screen_active(),"Resume Game")&&find(lv_screen_active(),"New Game")&&find(lv_screen_active(),"Update")&&find(lv_screen_active(),"About"),"inside a launcher the start screen adds Apps");
+  screenshot("ui-startup-launcher.bmp");
+  click("Apps");check(exited&&!launched.state().active,"Apps returns to the launcher");
+  app=&ui;
  }
  lv_deinit();std::cout<<"All round-screen counter interaction checks passed\n";
 }
