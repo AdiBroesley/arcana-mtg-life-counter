@@ -6,7 +6,8 @@
 namespace mtg {
 using namespace widgets;
 void AppUI::buildMultiplayer(){
- if(view_==View::ArcanaMode){auto* single=radialSector("SINGLE ARCANA",0,2,SingleArcana,0,0x246e88,ToolIcon::Shield);auto* multi=radialSector("MULTI ARCANA",1,2,MultiArcana,0,0x159870,ToolIcon::LifeLink);for(auto* tile:{single,multi}){auto* caption=lv_obj_get_child(tile,1);lv_obj_set_x(caption,60);lv_obj_set_width(caption,180);}}
+ if(view_==View::ArcanaMode){auto* single=radialSector("SINGLE ARCANA",0,2,SingleArcana,0,0x246e88,ToolIcon::Shield);auto* multi=radialSector("MULTI ARCANA",1,2,MultiArcana,0,0x159870,ToolIcon::LifeLink);for(auto* tile:{single,multi}){auto* caption=lv_obj_get_child(tile,1);lv_obj_set_x(caption,60);lv_obj_set_width(caption,180);}
+  if(lowBatteryWarned_){auto* caption=lv_obj_get_child(multi,1);lv_label_set_long_mode(caption,LV_LABEL_LONG_WRAP);lv_obj_set_height(caption,LV_SIZE_CONTENT);lv_label_set_text(caption,"BATTERY BELOW 5%\nTAP AGAIN");lv_obj_set_y(caption,250);lv_obj_set_style_text_align(caption,LV_TEXT_ALIGN_CENTER,0);lv_obj_set_style_text_color(caption,lv_color_hex(0xffd166),0);}}
  else if(view_==View::NameSetup){
   auto* top=radialSector("",0,2,NoAction,0,0x246e88,ToolIcon::LifeLink);lv_obj_clean(top);auto* lower=radialSector("",1,2,NoAction,0,0x16483e,ToolIcon::LifeLink);lv_obj_clean(lower);
   auto* ok=button(screen_,"OK",120,43,120,32,NameConfirm,0,0x00b981);lv_obj_set_style_radius(ok,16,0);lv_obj_set_style_pad_all(ok,0,0);lv_obj_set_style_border_color(ok,lv_color_hex(0x60ffd4),0);auto* okText=lv_obj_get_child(ok,0);lv_obj_set_style_text_font(okText,&lv_font_montserrat_20,0);lv_obj_set_size(okText,LV_SIZE_CONTENT,lv_font_montserrat_20.line_height);lv_obj_center(okText);

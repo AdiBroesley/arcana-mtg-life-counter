@@ -1,3 +1,4 @@
+#include <functional>
 #include "lvgl.h"
 #include "ui/AppUI.hpp"
 #include "core/AppInfo.hpp"
@@ -151,15 +152,21 @@ int main() {
  auto* undoSemantic=find(lv_screen_active(),"Undo");auto* undoTarget=lv_obj_get_parent(undoSemantic);
  check(lv_obj_get_style_opa(undoTarget,0)==255,"disabled Undo touch target must not create a large opacity layer");
  auto pixelsBeforeFirstWheel=flushedPixels;
- game.setActionTime(lv_tick_get());game.adjustLife(-1);ui.update();tick(15);undoSemantic=find(lv_screen_active(),"Undo -1");check(undoSemantic,"recent Undo label is updated");
+ game.setActionTime(lv_tick_get());game.adjustLife(-1);ui.update();tick(15);check(!find(lv_screen_active(),"Undo -1")&&find(lv_screen_active(),"Undo"),"recent Undo stays inactive while the wheel is still turning");
+ tick(65);undoSemantic=find(lv_screen_active(),"Undo -1");check(undoSemantic,"recent Undo label appears once input settles");
  std::cout<<"First life edit redraw: "<<flushedPixels-pixelsBeforeFirstWheel<<" pixels\n";
  check(flushedPixels-pixelsBeforeFirstWheel<size*size/3,"the first wheel edit and Undo activation must not repaint the whole face");
  undoTarget=lv_obj_get_parent(undoSemantic);auto* firstUndoLetter=lv_obj_get_child(undoTarget,1);auto undoGlyphCount=lv_obj_get_child_count(undoTarget);
  tick(15);auto pixelsBeforeWheel=flushedPixels;
- game.adjustLife(-1);ui.update();tick();check(find(lv_screen_active(),"Undo -2")&&lv_obj_get_child(undoTarget,1)==firstUndoLetter&&lv_obj_get_child_count(undoTarget)==undoGlyphCount,"curved Undo letters are reused between edits");
+ game.adjustLife(-1);ui.update();tick();check(!find(lv_screen_active(),"Undo -1")&&lv_obj_get_child(undoTarget,1)==firstUndoLetter&&lv_obj_get_child_count(undoTarget)==undoGlyphCount,"a new edit returns Undo to its settling state and reuses curved letters");
+ auto settlePixels=flushedPixels-pixelsBeforeWheel;std::cout<<"Undo settle redraw: "<<settlePixels<<" pixels\n";
+ check(settlePixels<size*size/3,"returning Undo to its settling state must stay within its visible bottom sector");
+ pixelsBeforeWheel=flushedPixels;
+ game.adjustLife(-1);ui.update();tick();check(game.history().back().description=="Life -2","rapid wheel edits merge into one history step");
  auto wheelPixels=flushedPixels-pixelsBeforeWheel;std::cout<<"Steady life edit redraw: "<<wheelPixels<<" pixels\n";
- check(wheelPixels>0&&wheelPixels<size*size/10,"steady life changes must redraw only the changed number and Undo glyphs");
+ check(wheelPixels>0&&wheelPixels<size*size/10,"steady life changes must redraw only the changed number");
  checkFullRedrawMatches("steady wheel edit");
+ tick(80);check(find(lv_screen_active(),"Undo -2")&&lv_obj_get_child(undoTarget,1)==firstUndoLetter&&lv_obj_get_child_count(undoTarget)==undoGlyphCount,"curved Undo letters are reused between edits");
  auto pixelsBeforeExpiry=flushedPixels;
  lv_tick_inc(5100);ui.update();tick(15);check(find(lv_screen_active(),"Undo")&&lv_obj_get_child_count(undoTarget)==undoGlyphCount&&lv_obj_has_flag(lv_obj_get_child(undoTarget,-1),LV_OBJ_FLAG_HIDDEN),"expired Undo hides surplus glyphs for reuse");
  std::cout<<"Undo expiry redraw: "<<flushedPixels-pixelsBeforeExpiry<<" pixels\n";
@@ -249,10 +256,10 @@ int main() {
  auto preservedMatch=game.serialize();click("New Game");click("Yes");click("SINGLE ARCANA");click("Classic");click("Back");click("Back");click("Back");check(game.serialize()==preservedMatch&&find(lv_screen_active(),"New Game"),"cancel format setup preserves current match");
  click("New Game");click("Yes");click("SINGLE ARCANA");click("Commander");rotate(2);click("Confirm");check(game.state().playerCount==6&&game.player().life==40&&game.player().counters[6]==0&&game.player().counters[0]==0,"Yes resets current player count and stats");
  game.startNewGame(1);ui.goHome();tick();check(!find(lv_screen_active(),"P1")&&!find(lv_screen_active(),"P2")&&find(lv_screen_active(),LV_SYMBOL_SETTINGS),"solo layout has no opponent tabs");
- game.startNewGame(4);ui.goHome();tick();rotate(-5);rotate(-5);
+ game.startNewGame(4);ui.goHome();tick();rotate(-5);rotate(-5);check(game.history().size()==1&&!find(lv_screen_active(),"Undo -10"),"rapid rotations merge and keep Undo settling");tick(80);
  check(game.player().life==30&&find(lv_screen_active(),"Undo -10"),"two -5 rotations aggregate on main Undo");screenshot("ui-adjustments-home.bmp");
  click("Undo -10");check(game.player().life==40,"main Undo reverses five-second group");
- rotate(5);tick(251);check(game.player().life==45&&lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Undo")),LV_STATE_DISABLED),"expired main Undo disabled");
+ rotate(5);tick(330);check(game.player().life==45&&lv_obj_has_state(lv_obj_get_parent(find(lv_screen_active(),"Undo")),LV_STATE_DISABLED),"expired main Undo disabled");
  clickAt(35,195);check(find(lv_screen_active(),"ENERGY")&&find(lv_screen_active(),"Back"),"short tap opens left picker without editing a counter");click("ENERGY");
  check(game.state().shortcuts[0]==mtg::Counter::Energy,"left picker changes shortcut");
  clickAt(35,141);clickAt(35,141);clickAt(35,245);check(game.player().counters[1]==1&&game.player().life==45,"left side +/- edit selected energy only");
@@ -375,7 +382,7 @@ int main() {
   tap(layout.counters[0].icon);check(find(lv_screen_active(),"ENERGY"),"each face opens the counter picker");click("ENERGY");check(game.state().shortcuts[0]==mtg::Counter::Energy,"each face can replace its selected counter");
   click(LV_SYMBOL_SETTINGS);check(find(lv_screen_active(),"Flip Coin")&&find(lv_screen_active(),"Display"),"each face keeps the full gear menu");click("Back");
   click("P2");check(find(lv_screen_active(),"P2 / CMD"),"each face opens opponent commander damage");click("Back");
-  game.startNewGame(4);multiUI.goHome();tick(15);game.setActionTime(lv_tick_get());game.adjustLife(-1);tick(5);tap(layout.undo);check(game.player().life==40,"each face keeps grouped recent Undo");
+  game.startNewGame(4);multiUI.goHome();tick(15);game.setActionTime(lv_tick_get());game.adjustLife(-1);tick(5);tap(layout.undo);check(game.player().life==39,"each face ignores Undo taps while input settles");tick(75);tap(layout.undo);check(game.player().life==40,"each face keeps grouped recent Undo");
   game.adjustLife(-game.player().life);tick(15);check(find(lv_screen_active(),"\xef\x95\x8c")&&find(lv_screen_active(),"LIFE 0 OR LESS"),"each face keeps the skull and lethal reason");
   game.startNewGame(4);multiUI.goHome();tick(18);screenshot(("ui-face-"+std::to_string(design)+".bmp").c_str());
   if(design==11){
@@ -439,5 +446,28 @@ int main() {
   check(game.player().life==life&&!rebootUI.lifeOnlyIdle(),"net-zero physical wheel activity still wakes the minimal face safely");
  }
  hardware.setBrightness(50);click(LV_SYMBOL_SETTINGS);click("Display");click("Dim After");rotate(-1000);check(find(lv_screen_active(),"Never"),"zero idle delay is displayed as Never");click("Back");click("Back");click("Back");tick(800);check(!hardware.idle()&&!rebootUI.lifeOnlyIdle(),"Never keeps normal face active");
+ {
+  // Device autosave / Resume after reset, and the low-battery multiplayer warning.
+  ProfileMemory saved;game.endGame();hardware.setBattery(75);
+  mtg::AppUI saveUI(game,hardware,device,random);app=&saveUI;saveUI.setMatchStorage(&saved);saveUI.showStartup();tick(5);
+  check(!saveUI.canResume()&&!find(lv_screen_active(),"Resume Game")&&find(lv_screen_active(),"New Game"),"without a saved match the start screen is unchanged");
+  game.startNewGame(2,mtg::GameFormat::Classic);saveUI.goHome();tick(5);game.setActionTime(lv_tick_get());game.adjustLife(-3);
+  tick(50);check(saved.saves==0,"autosave waits about two seconds after the last change");
+  tick(60);check(saved.saves==1&&!saved.value.empty(),"the active match is autosaved");
+  auto savesAfterEdit=saved.saves;tick(200);check(saved.saves==savesAfterEdit,"an unchanged match is not rewritten");
+  mtg::GameState afterReset;mtg::AppUI resumeUI(afterReset,hardware,device,random);app=&resumeUI;resumeUI.setMatchStorage(&saved);resumeUI.showStartup();tick(5);
+  check(resumeUI.canResume()&&find(lv_screen_active(),"Resume Game")&&find(lv_screen_active(),"New Game")&&find(lv_screen_active(),"Update")&&find(lv_screen_active(),"About"),"after a reset the start screen offers Resume Game");
+  screenshot("ui-startup-resume.bmp");
+  click("Resume Game");check(afterReset.state().active&&afterReset.player().life==17&&afterReset.state().format==mtg::GameFormat::Classic&&afterReset.state().playerCount==2&&!resumeUI.canResume(),"Resume restores the saved match");
+  afterReset.endGame();tick(110);check(saved.value.empty(),"ending the match clears the saved game");
+  mtg::GameState cleanBoot;mtg::AppUI cleanUI(cleanBoot,hardware,device,random);app=&cleanUI;cleanUI.setMatchStorage(&saved);cleanUI.showStartup();tick(5);check(!cleanUI.canResume()&&!find(lv_screen_active(),"Resume Game"),"an ended match is not offered again");
+  ProfileMemory damaged;damaged.value="{not json";mtg::AppUI damagedUI(cleanBoot,hardware,device,random);app=&damagedUI;damagedUI.setMatchStorage(&damaged);damagedUI.showStartup();tick(5);check(!damagedUI.canResume(),"unreadable saved data is ignored instead of offered");
+  hardware.setBattery(4);click("New Game");tick(5);check(find(lv_screen_active(),"MULTI ARCANA"),"New Game opens Single/Multi selection");
+  click("MULTI ARCANA");check(find(lv_screen_active(),"BATTERY BELOW 5%\nTAP AGAIN"),"multiplayer below 5% battery shows a warning first");
+  screenshot("ui-multiplayer-low-battery.bmp");
+  click("BATTERY BELOW 5%\nTAP AGAIN");check(!find(lv_screen_active(),"MULTI ARCANA")&&!find(lv_screen_active(),"SINGLE ARCANA"),"a second tap continues to multiplayer setup");
+  hardware.setBattery(50);cleanBoot.endGame();damagedUI.showStartup();tick(5);click("New Game");tick(5);click("MULTI ARCANA");check(!find(lv_screen_active(),"MULTI ARCANA")&&!find(lv_screen_active(),"BATTERY BELOW 5%\nTAP AGAIN"),"with enough battery multiplayer opens directly");
+  hardware.setBattery(75);app=&ui;
+ }
  lv_deinit();std::cout<<"All round-screen counter interaction checks passed\n";
 }

@@ -1,6 +1,8 @@
+#include <algorithm>
 #include "platform/IdleBacklight.hpp"
 #include "platform/TimingStats.hpp"
 #include "platform/BatteryRing.hpp"
+#include "platform/BatteryFilter.hpp"
 #include "platform/EncoderBatch.hpp"
 #include "platform/RoundDisplay.hpp"
 #include <vector>
@@ -60,16 +62,36 @@ int main(){try{
  mtg::TimingStats stats;check(stats.percentile(95)==0,"Empty metric");for(unsigned i=1;i<=100;++i)stats.add(i);
  check(stats.count()==100&&stats.mean()==50&&stats.percentile(50)==50&&stats.percentile(95)==95&&stats.maximum()==100,"Timing summary incorrect");
  for(unsigned i=0;i<128;++i)stats.add(200);check(stats.percentile(95)==200&&stats.maximum()==200,"Rolling percentile incorrect");
- auto batteryColor=[](unsigned percent){mtg::BatteryStatus battery;battery.available=true;battery.percent=percent;return mtg::batteryRingColor(battery);};
- check(batteryColor(0)==mtg::RingColor{5,0,0}&&batteryColor(29)==mtg::RingColor{5,0,0},"Ring must be about two percent red below 30 percent");
- check(batteryColor(30)==mtg::RingColor{0,5,0}&&batteryColor(31)==mtg::RingColor{0,5,0}&&batteryColor(100)==mtg::RingColor{0,5,0},"Ring must be dim green at/above 30 percent");
+ auto batteryColor=[](unsigned percent,std::uint64_t now=0){mtg::BatteryStatus battery;battery.available=true;battery.percent=percent;return mtg::batteryRingColor(battery,now);};
+ check(batteryColor(100)==mtg::RingColor{0,mtg::ringPeak,0}&&mtg::ringPeak==13,"Full battery is green at about 5 percent luminosity");
+ check(batteryColor(60)==mtg::RingColor{mtg::ringPeak,mtg::ringPeak,0},"Half-way battery is yellow");
+ check(batteryColor(20)==mtg::RingColor{mtg::ringPeak,0,0}&&batteryColor(15)==mtg::RingColor{mtg::ringPeak,0,0}&&batteryColor(10)==mtg::RingColor{mtg::ringPeak,0,0},"20 to 10 percent is steady red");
+ unsigned lastGreen=0;bool monotonic=true;for(unsigned p=20;p<=100;++p){auto c=batteryColor(p);monotonic=monotonic&&c.green>=lastGreen&&c.blue==0&&std::max(c.red,c.green)==mtg::ringPeak;lastGreen=c.green;}
+ check(monotonic,"Gradient moves steadily towards green and keeps the brighter channel at peak");
+ mtg::BatteryStatus low;low.available=true;low.percent=9;
+ check(mtg::batteryRingPulses(low)&&!mtg::batteryRingPulses([]{mtg::BatteryStatus b;b.available=true;b.percent=10;return b;}()),"Only below 10 percent pulses on battery");
+ auto lowDim=mtg::batteryRingColor(low,0),lowBright=mtg::batteryRingColor(low,mtg::ringLowPulsePeriodMs/2);
+ check(lowDim.red>0&&lowDim.red<lowBright.red&&lowBright==mtg::RingColor{mtg::ringPeak,0,0}&&lowDim.green==0&&lowDim.blue==0,"Low battery pulses slowly in red without switching fully off");
+ check(mtg::batteryRingColor(low,mtg::ringLowPulsePeriodMs)==lowDim&&mtg::ringLowPulsePeriodMs==8000,"Low-battery pulse repeats every 8 seconds");
  check(mtg::batteryRingColor({})==mtg::RingColor{},"Unknown battery must not display a fabricated status");
- mtg::BatteryStatus usb;usb.available=true;usb.externalPower=true;usb.percent=80;
- check(mtg::batteryRingColor(usb)==mtg::RingColor{},"USB supply estimate must not select a battery color");
- auto fullRing=mtg::ringFrame(batteryColor(29));
+ mtg::BatteryStatus usb;usb.externalPower=true;
+ auto usbDim=mtg::batteryRingColor(usb,0),usbBright=mtg::batteryRingColor(usb,mtg::ringPowerPulsePeriodMs/2);
+ check(mtg::batteryRingPulses(usb)&&usbDim.red==0&&usbDim.green==0&&usbDim.blue>0&&usbBright==mtg::RingColor{0,0,mtg::ringPeak}&&mtg::batteryRingColor(usb,mtg::ringPowerPulsePeriodMs)==usbDim&&mtg::ringPowerPulsePeriodMs==8000,"External power pulses blue every 8 seconds");
+ auto fullRing=mtg::ringFrame(batteryColor(15));
  check(fullRing.size()==64*3,"Ring frame must reach longer hardware revisions");
- for(unsigned i=0;i<64;++i)check(fullRing[i*3]==0&&fullRing[i*3+1]==5&&fullRing[i*3+2]==0,"Every LED slot, including beyond the demo's 13, must receive identical dim red in GRB order");
- auto greenRing=mtg::ringFrame(batteryColor(80));auto offRing=mtg::ringFrame({});
- for(unsigned i=0;i<64;++i){check(greenRing[i*3]==5&&greenRing[i*3+1]==0&&greenRing[i*3+2]==0,"Entire ring must receive green");check(offRing[i*3]==0&&offRing[i*3+1]==0&&offRing[i*3+2]==0,"USB/off must clear every LED slot");}
+ for(unsigned i=0;i<64;++i)check(fullRing[i*3]==0&&fullRing[i*3+1]==mtg::ringPeak&&fullRing[i*3+2]==0,"Every LED slot, including beyond the demo's 13, must receive identical red in GRB order");
+ auto greenRing=mtg::ringFrame(batteryColor(100));auto offRing=mtg::ringFrame({});
+ for(unsigned i=0;i<64;++i){check(greenRing[i*3]==mtg::ringPeak&&greenRing[i*3+1]==0&&greenRing[i*3+2]==0,"Entire ring must receive green");check(offRing[i*3]==0&&offRing[i*3+1]==0&&offRing[i*3+2]==0,"Off must clear every LED slot");}
+ check(mtg::batteryPercentFromMillivolts(4250)==100&&mtg::batteryPercentFromMillivolts(4200)==100&&mtg::batteryPercentFromMillivolts(3500)==5&&mtg::batteryPercentFromMillivolts(3200)==0&&mtg::batteryPercentFromMillivolts(3575)==12,"Voltage curve keeps its calibrated points");
+ mtg::BatteryFilter filter;check(filter.update(3580)==mtg::batteryPercentFromMillivolts(3580),"First sample seeds the filter");
+ auto seeded=filter.update(3580);bool steadyRing=true;
+ for(int i=0;i<40;++i){auto p=filter.update(i%2?3560:3600);steadyRing=steadyRing&&p<=seeded&&p+3>=seeded;}
+ check(steadyRing,"Load jitter of +/-20 mV keeps the estimate steady");
+ mtg::BatteryFilter dip;for(int i=0;i<8;++i)dip.update(3540);auto lowEstimate=dip.update(3540);
+ for(int i=0;i<3;++i)dip.update(3555);
+ check(dip.update(3555)<lowEstimate+mtg::BatteryFilter::riseMargin,"Brief voltage recovery after a load drop does not raise the estimate");
+ for(int i=0;i<20;++i)dip.update(3700);check(dip.update(3700)>=lowEstimate+mtg::BatteryFilter::riseMargin,"A sustained rise (e.g. after charging) is followed");
+ mtg::BatteryFilter falling;falling.update(3800);for(int i=0;i<30;++i)falling.update(3480);check(falling.update(3480)<5,"Drops are followed promptly");
+ falling.reset();check(falling.update(4100)==mtg::batteryPercentFromMillivolts(4100),"Reset re-seeds after unplugging");
  std::cout<<"Idle backlight, battery ring and timing statistics passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

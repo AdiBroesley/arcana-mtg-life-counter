@@ -3,6 +3,7 @@
 #include <vector>
 #include <deque>
 #include <optional>
+#include <utility>
 namespace mtg {
 class IProfiler;
 struct GameSnapshot {
@@ -32,6 +33,8 @@ public:
  bool synchronizeLocal(std::int64_t life,const std::array<std::int64_t,counterCount>& counters);
  void endGame();
  std::string serialize() const;
+ // Compact current-state-only form (no Undo history) for frequent autosaves.
+ std::string serializeSnapshot() const;
  bool deserialize(const std::string& json);
  bool adjustCommanderDamage(std::uint32_t sourceId, std::int64_t delta, bool subtractLife);
  bool setShortcut(unsigned side,Counter counter);
@@ -56,6 +59,10 @@ public:
  bool newTurn();
  bool poisonWarning() const;
  bool commanderWarning() const;
+ // Rapid edits (each within settleMs of the previous one) form one burst. Same-kind
+ // edits in a burst merge into one history entry; the grouped Undo becomes
+ // available settleMs after the last edit and stays available for undoWindowMs.
+ static constexpr std::uint64_t settleMs=500, undoWindowMs=5000;
  bool canUndo() const { return cursor_ > 0; }
  bool canRedo() const { return cursor_ < history_.size(); }
  bool undo();
@@ -64,8 +71,13 @@ public:
  std::size_t historyCursor() const { return cursor_; }
  void reset();
 private:
- bool commit(GameSnapshot next, std::string description);
+ enum class GroupKind : unsigned char {None,Life,PlayerLife,Counter};
+ struct GroupKey {GroupKind kind=GroupKind::None;unsigned index=0;bool operator==(const GroupKey& o)const{return kind==o.kind&&index==o.index;}};
+ bool commit(GameSnapshot next, std::string description, GroupKey group);
+ bool commit(GameSnapshot next, std::string description){return commit(std::move(next),std::move(description),GroupKey{});}
+ bool recentVisible(std::uint64_t now) const;
  struct RecentEdit {GameSnapshot before;std::uint64_t time;};
+ GroupKey lastGroup_;
  std::deque<RecentEdit> recent_;
  std::optional<std::uint64_t> actionTime_;
  GameSnapshot state_;

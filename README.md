@@ -181,7 +181,7 @@ The user completed a successful five-device multiplayer playtest on 2026-11-21, 
 
 Brawl uses the requested tabletop 25-life preset and has no commander-damage loss warning. See [Wizards' Brawl format page](https://magic.wizards.com/en/formats/brawl). No separate Arena preset is included.
 
-## Main-face shortcuts and five-second Undo
+## Main-face shortcuts and grouped Undo
 
 The left shortcut defaults to Treasures; the right defaults to Poison. Each shows its own current count on the symbol. The curved +/- segments above and below each symbol edit that side's **selected tracker**, independently of life. Their outside edge follows the main-face circle, while their inside edge stops at the continuous teal life-dial ring beside the segmented ring. Plus is green and minus is pink; their symbols sit in the center of each visible curved field. Both token outlines match the main-face teal.
 
@@ -189,7 +189,7 @@ The left shortcut defaults to Treasures; the right defaults to Poison. Each show
 - Both shortcut choices and all counts stay in memory for the current match. New Game resets them to their defaults.
 - Shield is a **manual tally** for the permanent(s) you are tracking, not a player counter or automated prevention effect. Storm counts spells manually; the app does not infer card triggers.
 
-The main-face **Undo** reverses the entire group of game edits from the preceding **five seconds**, including linked life/commander damage and counter edits. Two five-step life reductions show **Undo -10**. A single-counter group shows its delta and name; mixed edits show an edit count. After five seconds with no eligible edits it becomes disabled. Normal Undo/Redo remains available under Trackers > History and through Ctrl+Z/Y. A recently undone group can be redone as one history entry. The quick group can include more than 64 rapid edits; restarting clears both advanced history and the five-second window.
+The main-face **Undo** reverses the latest **burst** of game edits: edits less than 0.5 s apart (one knob spin, a run of taps) form one group, including linked life/commander damage and counter edits. Same-kind edits in a burst also merge into a single history step (a spin of ten clicks is one "Life -10" entry), and a burst that ends where it started leaves no entry. While you are still turning, Undo stays dim; it becomes active 0.5 s after the last edit and keeps the same label (for example **Undo -10**) for five seconds before it is disabled. A single-counter group shows its delta and name; mixed edits show an edit count. Normal Undo/Redo remains available under Trackers > History and through Ctrl+Z/Y. A recently undone group can be redone as one history entry.
 
 ## Watch face and interaction
 

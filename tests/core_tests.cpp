@@ -20,7 +20,7 @@ int main() {
   bool recording()const override{return enabled;}
   void record(mtg::Work work,std::uint64_t)override{if(work==mtg::Work::HistoryRecord)++history;else if(work==mtg::Work::UndoApply)++undo;}
  } probe;
- mtg::GameState timed;timed.setProfiler(&probe);timed.startNewGame(4);timed.setActionTime(100);timed.adjustLife(-2);timed.undoRecent(101);timed.redo();
+ mtg::GameState timed;timed.setProfiler(&probe);timed.startNewGame(4);timed.setActionTime(100);timed.adjustLife(-2);timed.undoRecent(1600);timed.redo();
  check(probe.history==1&&probe.undo==2&&timed.player().life==38,"timing probes preserve grouped Undo and Redo semantics");
  probe.enabled=false;timed.adjustLife(1);check(probe.history==1&&timed.player().life==39,"inactive probes leave game edits working without samples");
  mtg::SimulatorHardware hardware;
@@ -106,18 +106,37 @@ int main() {
  random.alwaysMinimum=true;starter=mtg::rollStarter(6,random);check(starter.winner==0&&starter.rounds.size()==32,"pathological ties bounded without biased winner");
  starter=mtg::rollStarter(1,random);check(starter.winner==1&&starter.rounds[0][0].die==1,"solo D20 roll");
  mtg::GameState treasure;treasure.adjustCounter(mtg::Counter::Treasure,12);treasure.undo();check(treasure.player().counters[6]==0,"treasure undo");treasure.redo();check(treasure.player().counters[6]==12,"treasure redo");treasure.reset();check(treasure.player().counters[6]==0,"treasure reset");
- mtg::GameState recent;recent.setActionTime(1000);recent.adjustLife(-5);recent.setActionTime(2000);recent.adjustLife(-5);
- check(recent.recentUndoLabel(3000)=="Undo -10","recent life summary");
- check(recent.undoRecent(6501)&&recent.player().life==35,"five-second window excludes older edit");
- recent.redo();check(recent.player().life==30,"recent group redo");
+ mtg::GameState recent;recent.setActionTime(1000);recent.adjustLife(-5);recent.setActionTime(1400);recent.adjustLife(-5);
+ check(recent.history().size()==1&&recent.history()[0].description=="Life -10","rapid life edits merge into one history entry");
+ check(recent.recentUndoLabel(1400).empty()&&recent.recentUndoLabel(1899).empty(),"grouped Undo hidden until input settles");
+ check(recent.recentUndoLabel(1900)=="Undo -10","recent life summary after settling");
+ check(!recent.undoRecent(1700)&&recent.player().life==30,"grouped Undo ignored while input is still settling");
+ recent.setActionTime(5000);recent.adjustLife(-3);
+ check(recent.history().size()==2&&recent.recentUndoLabel(5500)=="Undo -3","a pause longer than the settle time starts a new group");
+ check(recent.undoRecent(5500)&&recent.player().life==30,"grouped Undo only reverses the latest burst");
+ recent.redo();check(recent.player().life==27,"recent group redo");
  recent.startNewGame(4);recent.setActionTime(10000);for(int i=0;i<100;++i)recent.adjustLife(-1);
- check(recent.history().size()==64&&recent.recentUndoLabel(11000)=="Undo -100","recent group extends beyond bounded history");
- check(recent.undoRecent(11000)&&recent.player().life==40,"all rapid edits reversed");
- recent.setActionTime(11000);recent.redo();check(recent.recentUndoLabel(11000)=="Undo -100","redo can be reversed with recent Undo");recent.undoRecent(11000);
+ check(recent.history().size()==1&&recent.recentUndoLabel(10500)=="Undo -100","one knob spin is one history step");
+ check(recent.undoRecent(10500)&&recent.player().life==40,"all rapid edits reversed");
+ recent.setActionTime(10500);recent.redo();check(recent.recentUndoLabel(10500).empty()&&recent.recentUndoLabel(11000)=="Undo -100","redo can be reversed with recent Undo");recent.undoRecent(11000);
  mtg::GameState recentSaved;check(recentSaved.deserialize(recent.serialize()),"grouped undo serializes coherently");recentSaved.redo();check(recentSaved.player().life==-60,"grouped redo after restore");
- recent.setActionTime(20000);recent.adjustCounter(mtg::Counter::Energy,3);check(recent.recentUndoLabel(25001).empty(),"expired recent action disabled");
+ recent.setActionTime(20000);recent.adjustCounter(mtg::Counter::Energy,3);check(!recent.recentUndoLabel(20500).empty()&&recent.recentUndoLabel(25501).empty(),"expired recent action disabled");
  recent.setActionTime(30000);recent.adjustCounter(mtg::Counter::Poison,2);recent.applyCommanderDamage(1,4,true);
- check(recent.undoRecent(31000)&&recent.player().life==40&&recent.source(1)->damage==0&&recent.player().counters[0]==0&&recent.player().counters[1]==3,"mixed recent changes restore atomically");
+ check(recent.undoRecent(30500)&&recent.player().life==40&&recent.source(1)->damage==0&&recent.player().counters[0]==0&&recent.player().counters[1]==3,"mixed recent changes restore atomically");
+ auto entries=recent.historyCursor();recent.setActionTime(40000);recent.adjustLife(-1);recent.setActionTime(40200);recent.adjustLife(1);
+ check(recent.history().size()==entries&&recent.player().life==40&&recent.recentUndoLabel(41000).empty(),"a burst that nets to zero leaves no history or Undo");
+ recent.setActionTime(50000);recent.adjustCounter(mtg::Counter::Poison,1);recent.setActionTime(50300);recent.adjustCounter(mtg::Counter::Poison,1);recent.setActionTime(50450);recent.adjustLife(-2);
+ check(recent.history().size()==entries+2&&recent.history()[entries].description=="POISON +2","different edit kinds stay separate history steps");
+ check(recent.recentUndoLabel(50950)=="Undo 2 edits"&&recent.undoRecent(50950)&&recent.player().counters[0]==0&&recent.player().life==40,"mixed burst undone as one step");
+ mtg::GameState spin;spin.startNewGame(4);for(int i=0;i<10;++i){spin.setActionTime(100000+i*150);spin.adjustLife(-1);}
+ bool steady=true;for(std::uint64_t t=101850;t<=106850;t+=250)steady=steady&&spin.recentUndoLabel(t)=="Undo -10";
+ check(steady&&spin.recentUndoLabel(106851).empty(),"a knob spin keeps one Undo label until the whole group expires (no -10, -9, -8 countdown)");
+ mtg::GameState snap;snap.startNewGame(3,mtg::GameFormat::Commander);snap.adjustLife(-7);snap.adjustCounter(mtg::Counter::Poison,2);snap.applyCommanderDamage(1,5,true);
+ mtg::GameState restored;check(restored.deserialize(snap.serializeSnapshot())&&restored.serialize()!=snap.serialize()&&restored.player().life==28&&restored.player().counters[0]==2&&restored.source(1)->damage==5&&restored.state().active&&restored.state().playerCount==3,"compact snapshot restores the full current state");
+ check(restored.history().empty()&&!restored.canUndo()&&snap.serializeSnapshot().size()<snap.serialize().size(),"compact snapshot omits Undo history");
+ mtg::GameState opponents;opponents.startNewGame(4,mtg::GameFormat::Classic);opponents.setActionTime(100);opponents.adjustPlayerLife(3,-1);opponents.adjustPlayerLife(3,-1);opponents.adjustPlayerLife(2,-1);
+ check(opponents.history().size()==2&&opponents.history()[0].description=="P3 life -2"&&opponents.life(3)==18,"opponent life edits merge per player");
+ opponents.undo();opponents.setActionTime(200);opponents.adjustPlayerLife(3,-1);check(opponents.history().size()==2&&opponents.life(3)==17,"edits after a manual Undo never merge into an undone entry");
  mtg::GameState formats;
  for(auto format:{mtg::GameFormat::Classic,mtg::GameFormat::Brawl,mtg::GameFormat::Limited}) {
   check(formats.startNewGame(2,format),"start noncommander preset");auto hp=mtg::startingLife(format);

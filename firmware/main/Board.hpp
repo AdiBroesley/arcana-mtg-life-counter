@@ -14,6 +14,7 @@
 #include "driver/gpio.h"
 #include "platform/IdleBacklight.hpp"
 #include "platform/BatteryRing.hpp"
+#include "platform/BatteryFilter.hpp"
 #include "platform/EncoderBatch.hpp"
 #include "driver/rmt_tx.h"
 #include <array>
@@ -24,12 +25,19 @@ class Board final : public IHardware {
 public:
  void begin();
  void pollBattery();
+ // Advances the battery-ring pulse (low battery / external power); no-op when steady.
+ void tickRing();
  void pollIdle();
  void diagnoseRing(char command);
  void discardPendingInput();
  void prepareInput();
  void waitForActivity(unsigned milliseconds);
  bool touchHeld()const{return (sampledTouch_.load()&(1u<<18))!=0;}
+ // True while the ring animates; the main loop must keep its short wait then.
+ bool ringAnimating()const{return !ringTestUntil_&&batteryRingPulses(battery_);}
+ // A failed LCD transfer abandons that frame; the loop then repaints the screen.
+ bool takeRedrawRequest(){bool value=redrawRequested_;redrawRequested_=false;return value;}
+ unsigned displayFaults()const{return displayFaults_;}
  void diagnoseBatteryHardware();
  void setProfiler(Profiler* profiler){profiler_=profiler;}
  IProfiler* profiler()const override{return profiler_;}
@@ -89,10 +97,12 @@ private:
  rmt_encoder_handle_t ringEncoder_=nullptr;
  rmt_symbol_word_t* ringSymbols_=nullptr;
  RingColor ringColor_;
- bool ringApplied_=false,ringFailed_=false,ringEnabled_=false;
- bool ringDma_=true;uint64_t ringTestUntil_=0;
+ bool ringApplied_=false,ringFailed_=false,ringEnabled_=false,ringPulsing_=false;
+ bool ringDma_=true;uint64_t ringTestUntil_=0,lastRingFrame_=0;
  esp_err_t ringError_=ESP_OK;unsigned ringFrames_=0;
  int batteryMillivolts_=-1;
+ BatteryFilter batteryFilter_;
+ bool redrawRequested_=false;unsigned displayFaults_=0;uint64_t lastDisplayFaultLog_=0;
  struct BatterySample {uint64_t time;int millivolts;BatteryStatus status;bool usb;};
  std::array<BatterySample,16> batterySamples_{};unsigned batterySampleCount_=0;
 };

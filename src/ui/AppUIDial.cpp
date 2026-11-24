@@ -93,10 +93,19 @@ void AppUI::buildLifecycle() {
  if(view_==View::Startup) {
   label(screen_,"A R C A N A",65,67,230,&lv_font_montserrat_20,violet);
   label(screen_,"LIFE COUNTER",55,103,250,&lv_font_montserrat_14,muted);
-  newGameButton_=button(screen_,"New Game",83,145,194,44,NewGame);
-  updateButton_=button(screen_,"Update",83,202,194,40,OpenUpdates);
-  button(screen_,"About",103,255,154,36,OpenAbout);
-  detail_=label(screen_,"",70,304,220,&lv_font_montserrat_14,muted);
+  if(canResume()) {
+   // A saved match survived a reset: offer it first, keep New Game one tap away.
+   button(screen_,"Resume Game",83,138,194,44,ResumeGame);
+   newGameButton_=button(screen_,"New Game",83,190,194,40,NewGame);
+   updateButton_=button(screen_,"Update",70,240,107,36,OpenUpdates);
+   button(screen_,"About",183,240,107,36,OpenAbout);
+   detail_=label(screen_,"",70,288,220,&lv_font_montserrat_14,muted);
+  }else {
+   newGameButton_=button(screen_,"New Game",83,145,194,44,NewGame);
+   updateButton_=button(screen_,"Update",83,202,194,40,OpenUpdates);
+   button(screen_,"About",103,255,154,36,OpenAbout);
+   detail_=label(screen_,"",70,304,220,&lv_font_montserrat_14,muted);
+  }
  }else if(view_==View::FormatSelect) {
   const unsigned colors[]{0x7c58ba,0x468ca9,0x349353,0xb18038,0x607eb1};
   const ToolIcon icons[]{ToolIcon::Shield,ToolIcon::D20,ToolIcon::LifeLink,ToolIcon::Reset,ToolIcon::Coin};
@@ -288,6 +297,13 @@ void AppUI::counterRockers() {
   }
  }
 }
+// LVGL 9 resets every active press whenever any object becomes disabled, which
+// would turn a held life-ring press into a fresh press (and its release into a
+// tap). Disabling waits for release; undoRecent() still refuses settling bursts.
+void AppUI::setRecentUndoAvailable(bool available) {
+ if(available)lv_obj_remove_state(undo_,LV_STATE_DISABLED);
+ else if(!hardware_.touch().pressed)lv_obj_add_state(undo_,LV_STATE_DISABLED);
+}
 void AppUI::curvedUndoText(const std::string& value) {
  if(freezeUndoCaption_)return;
  if(value==undoCurvedText_)return;undoCurvedText_=value;
@@ -421,7 +437,7 @@ void AppUI::refreshDial() {
   text(lifeMarker_,lethal?"\xef\x95\x8c":"\xef\x80\x84");textColor(lifeMarker_,lethal?lv_color_white():lv_color_hex(0xff2449));
   text(status_,info);textColor(status_,lethal?lv_color_white():lv_color_hex(teal));
   auto undoLabel=game_.recentUndoLabel(lv_tick_get());curvedUndoText(undoLabel.empty()?"Undo":undoLabel);
-  if(undoLabel.empty())lv_obj_add_state(undo_,LV_STATE_DISABLED);else lv_obj_remove_state(undo_,LV_STATE_DISABLED);
+  setRecentUndoAvailable(!undoLabel.empty());
   if(undoArc_){auto color=lv_color_hex(undoLabel.empty()?0x303c43:0x17586a);if(!lv_color_eq(lv_obj_get_style_arc_color(undoArc_,LV_PART_MAIN),color))lv_obj_set_style_arc_color(undoArc_,color,LV_PART_MAIN);}
   for(unsigned side=0;side<2;++side) {
    auto* count=side?poison_:aux_;auto value=std::to_string(game_.player().counters[static_cast<unsigned>(game_.state().shortcuts[side])]);

@@ -77,7 +77,7 @@ To restore the factory software, enter USB download mode and write the verified 
 .\.tools\esp-python\Scripts\python.exe -m esptool --chip esp32s3 --port COM3 --baud 460800 write_flash 0x0 backups/YOUR-FACTORY-BACKUP.bin
 ```
 
-The application formats storage automatically only when the entire storage partition is erased. Existing unmountable data produces an error instead of being silently destroyed. Only the multiplayer device profile uses alternating generation/checksum slots for recovery after an interrupted name save. Matches and Undo history remain in RAM and are never saved or recovered. Old match slots are left untouched and ignored.
+The application formats storage automatically only when the entire storage partition is erased. Existing unmountable data produces an error instead of being silently destroyed. Only the multiplayer device profile uses alternating generation/checksum slots for recovery after an interrupted name save. The active single-player match is autosaved to `match.json` (same alternating checksum slots) two seconds after its last change, without Undo history. After a reset, crash or power loss the start screen offers **Resume Game**; ending the match clears the save. Multiplayer matches are not saved. Old match slots are left untouched and ignored.
 
 ## Hardware checks after installation
 
@@ -164,9 +164,9 @@ The 2026-11-22 owner-device battery test recorded supply samples of 4,126-4,136 
 
 ### Battery-status ring
 
-The vendor demo describes a 13-pixel WS2812 chain on GPIO0; the supplied base schematic shows 12 RGB packages (LED2-LED13). A partial ring reported on the physical unit means the actual hardware/transfer behavior needs checking rather than assuming the demo count covers it. ARCANA now sends a uniform frame for up to 64 pixels, with surplus data harmlessly forwarded beyond shorter chains. Green is 5/255 (about 2%) at/above 30% battery; red is 5/255 (about 2%) below 30%. With USB power or an unavailable battery reading, the ring is off. After unplugging USB, allow up to five seconds for the next sample. It follows the same coarse voltage estimate as the battery icon.
+The vendor demo describes a 13-pixel WS2812 chain on GPIO0; the supplied base schematic shows 12 RGB packages (LED2-LED13). A partial ring reported on the physical unit means the actual hardware/transfer behavior needs checking rather than assuming the demo count covers it. ARCANA now sends a uniform frame for up to 64 pixels, with surplus data harmlessly forwarded beyond shorter chains. Peak brightness is about 5% (13/255) for every colour. On battery the ring shows the approximate charge as a gradient from green (100%) through yellow to red (20%), stays steady red from 20% to 10%, and pulses red slowly below 10%. While external/USB power is present it pulses blue slowly; the board cannot tell charging from full, so any external power selects blue. Both pulses use an 8-second cycle and never switch fully off. An unavailable reading leaves the ring off. Battery samples (every five seconds) are smoothed: drops are followed immediately, rises only after a 3-point margin, so the colour does not flicker at a threshold. After plugging or unplugging, allow up to five seconds for the next sample.
 
-The ring is steady, updates only on colour changes and uses the built-in RMT DMA driver with the complete frame buffered; the peripheral is disabled after each transfer. It does not animate, and its brightness is independent of the screen. Driver errors leave gameplay running and are reported in the serial log. Extra LED current and battery-runtime impact are unmeasured.
+A steady colour is sent only when it changes; while pulsing, the main loop sends about 12 frames per second (the loop already wakes at least that often then, so no extra wake-ups). Transfers use the built-in RMT DMA driver with the complete frame buffered, and the peripheral is disabled after each transfer. Ring brightness is independent of the screen. Driver errors leave gameplay running and are reported in the serial log. Extra LED current and battery-runtime impact are unmeasured.
 
 ### Diagnosing a dark ring
 

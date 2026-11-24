@@ -75,6 +75,9 @@ std::string GameState::serialize() const {
  for(const auto& h:history_)j["history"].push_back({{"before",encode(h.before)},{"after",encode(h.after)},{"description",h.description}});
  return j.dump(2);
 }
+std::string GameState::serializeSnapshot() const {
+ return Json({{"schema_version",5},{"state",encode(state_)},{"cursor",0},{"history",Json::array()}}).dump();
+}
 bool GameState::deserialize(const std::string& data) {
  try {
   if(data.size()>4*1024*1024)return false;

@@ -61,7 +61,9 @@ void Board::beginRing(bool dma){
 }
 void Board::updateRing(){
  if(!ringChannel_||ringFailed_)return;
- auto color=ringTestUntil_?RingColor{5,0,0}:batteryRingColor(battery_);
+ auto now=static_cast<uint64_t>(esp_timer_get_time()/1000);
+ auto color=ringTestUntil_?RingColor{5,0,0}:batteryRingColor(battery_,now);
+ lastRingFrame_=now;
  if(ringApplied_&&color==ringColor_)return;
  size_t index=0;
  for(auto byte:ringFrame(color)){
@@ -86,7 +88,11 @@ void Board::updateRing(){
  ringError_=error;
  if(error!=ESP_OK){ringFailed_=true;ESP_LOGW("RING","RGB update failed: %s",esp_err_to_name(error));return;}
  ringColor_=color;ringApplied_=true;++ringFrames_;
- ESP_LOGI("RING","%u pixel frame: %s, channel drive %u/255",ringFramePixels,color.green?"green":color.red?"red":"off",static_cast<unsigned>(color.green?color.green:color.red));
+ // Pulsing sends ~12 frames per second; log only steady colours and pulse start.
+ bool pulsing=!ringTestUntil_&&batteryRingPulses(battery_);
+ if(!pulsing)ESP_LOGI("RING","%u pixel frame: rgb %u/%u/%u of 255",ringFramePixels,static_cast<unsigned>(color.red),static_cast<unsigned>(color.green),static_cast<unsigned>(color.blue));
+ else if(!ringPulsing_)ESP_LOGI("RING","%u pixel frame: %s pulse, peak %u/255",ringFramePixels,battery_.externalPower?"blue (external power)":"red (low battery)",static_cast<unsigned>(ringPeak));
+ ringPulsing_=pulsing;
 }
 void Board::diagnoseRing(char command){
  if(command=='t'||command=='u'){
@@ -225,6 +231,13 @@ void Board::sampleTouch(void* context) {
  else {b.armInput(GPIO_NUM_7);ulTaskNotifyTake(pdTRUE,portMAX_DELAY);}
  }
 }
+void Board::tickRing(){
+ // ~12 frames per second is smooth for a 3 s pulse; the main loop already wakes
+ // at least every 50 ms, so this adds no extra wake-ups.
+ if(ringTestUntil_||!batteryRingPulses(battery_))return;
+ auto now=static_cast<uint64_t>(esp_timer_get_time()/1000);
+ if(now-lastRingFrame_>=80)updateRing();
+}
 void Board::pollBattery() {
  auto now=static_cast<uint64_t>(esp_timer_get_time()/1000);
  if(lastBattery_&&now-lastBattery_<5000)return;
@@ -239,11 +252,8 @@ void Board::pollBattery() {
  mv*=2;batteryMillivolts_=mv; // GPIO6 divider is 10k / 10k from VCC_OUT, not directly BAT+.
  battery_.externalPower=usb_serial_jtag_is_connected()||mv>4350;
  if(!battery_.externalPower&&mv>=2800&&mv<=4350){
-  constexpr int volts[]={3300,3500,3650,3750,3850,4000,4200};
-  constexpr unsigned levels[]={0,5,20,40,60,80,100};
-  battery_.available=true;battery_.percent=mv>=4200?100:0;
-  for(unsigned i=1;i<7;++i)if(mv>=volts[i-1]&&mv<volts[i])battery_.percent=levels[i-1]+(mv-volts[i-1])*(levels[i]-levels[i-1])/(volts[i]-volts[i-1]);
- }
+  battery_.available=true;battery_.percent=batteryFilter_.update(mv);
+ }else batteryFilter_.reset(); // Re-seed after plugging/unplugging: the rail jumps.
  if(first)ESP_LOGI("BATTERY","Supply %d mV; %s; estimate %u%%",mv,battery_.externalPower?"external power":battery_.available?"battery":"unavailable",battery_.percent);
 }
 void Board::flush(lv_display_t* display,const lv_area_t* area,uint8_t* pixels) {
@@ -255,8 +265,17 @@ void Board::flush(lv_display_t* display,const lv_area_t* area,uint8_t* pixels) {
   std::memcpy(b.dmaBuffer_,pixels+(y-area->y1)*w*2,bytes);
   blackOutsideFace(b.dmaBuffer_,area->x1,y,w,height,2);
   lv_draw_sw_rgb565_swap(b.dmaBuffer_,w*height);
-  ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(b.panel_,area->x1,y,area->x2+1,y+height,b.dmaBuffer_));
-  ESP_ERROR_CHECK(xSemaphoreTake(b.txDone_,pdMS_TO_TICKS(100))==pdTRUE?ESP_OK:ESP_ERR_TIMEOUT);
+  // A transfer error or timeout used to abort (reboot, losing the match). Drop
+  // the rest of this frame instead; the main loop repaints the whole screen.
+  auto error=esp_lcd_panel_draw_bitmap(b.panel_,area->x1,y,area->x2+1,y+height,b.dmaBuffer_);
+  if(error==ESP_OK&&xSemaphoreTake(b.txDone_,pdMS_TO_TICKS(100))!=pdTRUE)error=ESP_ERR_TIMEOUT;
+  if(error!=ESP_OK){
+   ++b.displayFaults_;b.redrawRequested_=true;
+   auto now=static_cast<uint64_t>(esp_timer_get_time()/1000);
+   if(!b.lastDisplayFaultLog_||now-b.lastDisplayFaultLog_>=5000){b.lastDisplayFaultLog_=now;ESP_LOGW("DISPLAY","LCD transfer failed (%s); frame dropped, full redraw requested (faults=%u)",esp_err_to_name(error),b.displayFaults_);}
+   if(error==ESP_ERR_TIMEOUT)xSemaphoreTake(b.txDone_,pdMS_TO_TICKS(100)); // Let a late DMA finish before the buffer is reused.
+   break;
+  }
  }
  b.transferPixels_+=w*(area->y2-area->y1+1);
  if(lv_display_flush_is_last(display)&&b.wheelFrameAt_){if(b.profiler_)b.profiler_->add(Profiler::WheelToFrame,esp_timer_get_time()-b.wheelFrameAt_);b.wheelFrameAt_=0;}
@@ -342,10 +361,14 @@ void Board::begin() {
   adc_cali_curve_fitting_config_t cal{};cal.unit_id=ADC_UNIT_1;cal.chan=ADC_CHANNEL_5;cal.atten=ADC_ATTEN_DB_12;cal.bitwidth=ADC_BITWIDTH_DEFAULT;
   if(adc_cali_create_scheme_curve_fitting(&cal,&calibration_)!=ESP_OK)calibration_=nullptr;
  }
+ // PCM5100A audio DAC is unused: drive XSMT (GPIO46, LOW = soft mute) low
+ // instead of leaving a floating strapping pin to decide its state.
+ gpio_config_t mute{};mute.pin_bit_mask=1ULL<<46;mute.mode=GPIO_MODE_OUTPUT;
+ ESP_ERROR_CHECK(gpio_config(&mute));ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_46,0));
  beginRing();pollBattery();
  // Keep peripheral outputs driven while automatic sleep isolates unused pins.
  for(auto pin:{GPIO_NUM_0,GPIO_NUM_8,GPIO_NUM_9,GPIO_NUM_10,GPIO_NUM_11,GPIO_NUM_12,
-               GPIO_NUM_13,GPIO_NUM_14,GPIO_NUM_15,GPIO_NUM_16,GPIO_NUM_17,GPIO_NUM_21})
+               GPIO_NUM_13,GPIO_NUM_14,GPIO_NUM_15,GPIO_NUM_16,GPIO_NUM_17,GPIO_NUM_21,GPIO_NUM_46})
   ESP_ERROR_CHECK(gpio_sleep_sel_dis(pin));
  BaseType_t started=xTaskCreatePinnedToCore(sampleTouch,"arcana_touch",4096,this,3,&touchTask_,1);
  assert(started==pdPASS);

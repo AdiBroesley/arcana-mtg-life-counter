@@ -5,6 +5,7 @@
 #include "core/Multiplayer.hpp"
 #include "platform/IHardware.hpp"
 #include "platform/IFirmwareUpdate.hpp"
+#include "platform/IStorage.hpp"
 #include "Widgets/ToolIcons.hpp"
 #include <deque>
 #include "FaceLayouts.hpp"
@@ -25,6 +26,15 @@ public:
  FaceLayout faceLayoutGeometry()const{return redesignedFace(faceDesign_)?activeFaceLayout_:mtg::faceLayout(faceDesign_);}
  bool faceControlsFit()const;
  bool lifeOnlyIdle()const{return idleLifeView_;}
+ bool animating()const{return transitionActive_||transitionPending_;}
+ // Device firmware: autosave the active single-player match (2 s after the last
+ // change) and offer Resume on the start screen after a reset. Undo history is
+ // not saved. Multiplayer matches are not saved.
+ void setMatchStorage(IStorage* storage);
+ bool canResume()const{return !resumeData_.empty();}
+ static constexpr std::uint32_t autosaveDelayMs=2000;
+ // Starting multiplayer below this battery level asks for a second tap first.
+ static constexpr unsigned lowBatteryRadioPercent=5;
  struct RenderTrial {unsigned phase;std::uint64_t micros;};
  // USB-only controlled comparison. Requires the single-player main life face.
  std::vector<RenderTrial> benchmarkUndoDrawing();
@@ -40,7 +50,7 @@ private:
  bool idleLifeView_=false;unsigned displayDraft_=5;
  unsigned observedBrightness_=100;std::uint32_t brightnessChangedAt_=0;bool brightnessPending_=false;
  enum class View { Display, DimDelay, IdleBrightness, Connection, FaceSelect, ContactCode, About, Updates, WifiSetup, Startup, ArcanaMode, NameSetup, HostJoin, BrowseGames, NetworkLobby, FormatSelect, PlayerSetup, EndConfirm, Gear, Brightness, ResetConfirm, CoinResult, RollResult, CounterPicker, Home, Menu, Counter, Sources, Damage, Commanders, Casts, Profiles, Status, History, Rename, AddSource, Threshold };
- enum Action { OpenDisplay,OpenDimDelay,OpenIdleBrightness,ToggleLifeOnly,ToggleWakeProtection,OpenConnection,ChooseConnection,OpenFaces,ChooseFace,FacePage,ContactLink, OpenAbout, OpenUpdates, CheckUpdate, InstallUpdate, SetupWifi, SingleArcana,MultiArcana,NameKey,NameChange,NameDelete,NameSpace,NameSymbols,NameConfirm,HostGame,FindGames,JoinGame,RefreshGames,NextGames,StartNetwork, ToggleRecipient, ChooseFormat, NoAction, OpenBrightness, ToolBack, SideStep, OpenPicker, ChooseShortcut, RecentUndo, OpenGear, AskReset, ResetYes, ResetNo, FlipCoin, RollD20, NewGame, ConfirmPlayers, SelectPlayer, CycleSource, CloseDial, RequestEnd, FinishGame, CancelEnd, Back, Menu, Minus, Plus, OpenCounter, OpenSources, OpenOwn, OpenProfiles, OpenStatus,
+ enum Action { ResumeGame,OpenDisplay,OpenDimDelay,OpenIdleBrightness,ToggleLifeOnly,ToggleWakeProtection,OpenConnection,ChooseConnection,OpenFaces,ChooseFace,FacePage,ContactLink, OpenAbout, OpenUpdates, CheckUpdate, InstallUpdate, SetupWifi, SingleArcana,MultiArcana,NameKey,NameChange,NameDelete,NameSpace,NameSymbols,NameConfirm,HostGame,FindGames,JoinGame,RefreshGames,NextGames,StartNetwork, ToggleRecipient, ChooseFormat, NoAction, OpenBrightness, ToolBack, SideStep, OpenPicker, ChooseShortcut, RecentUndo, OpenGear, AskReset, ResetYes, ResetNo, FlipCoin, RollD20, NewGame, ConfirmPlayers, SelectPlayer, CycleSource, CloseDial, RequestEnd, FinishGame, CancelEnd, Back, Menu, Minus, Plus, OpenCounter, OpenSources, OpenOwn, OpenProfiles, OpenStatus,
   OpenHistory, Undo, Redo, Apply, Mode, NewSource, CreateSource, NewOwn, NewTurn, Rename,
   Append, Delete, SaveName, Limit, ToggleCounter, Source, Own, ToggleStatus, Day };
  struct Binding { AppUI* ui; Action action; std::uint32_t arg; double sectorStart=0,sectorSpan=0; };
@@ -72,6 +82,7 @@ private:
  void refreshDial();
  void refreshBattery();
  void curvedUndoText(const std::string& value);
+ void setRecentUndoAvailable(bool available);
  void buildLifecycle();
  void buildInformation();
  void refreshInformation();
@@ -121,6 +132,11 @@ private:
  bool freezeUndoCaption_=false;
  bool subtractLife_=true, rebuild_=true, refreshDirty_=true, lastUpdateWork_=false;
  bool transitionPending_=false,transitionActive_=false;
+ IStorage* matchStorage_=nullptr;std::string resumeData_;
+ std::uint64_t savedRevision_=0;std::uint32_t saveDueAt_=0;bool saveDue_=false,savedActive_=false;
+ bool lowBatteryWarned_=false;
+ void autosaveMatch();
+ bool lowBatteryForRadio()const;
  std::uint32_t transitionStarted_=0,transitionFrame_=0;
  lv_obj_t* fadeCover_=nullptr;
  std::string draft_, notice_;

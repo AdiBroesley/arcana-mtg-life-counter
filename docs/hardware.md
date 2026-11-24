@@ -40,7 +40,7 @@ On 2026-11-20, the first hardware image was flashed and verified on the user's u
 
 The vendor files `Demo_idf/demo/main/device/pinconfig.h` and `Demo_idf/demo/main/led_strip/led_strip_init.c` identify GPIO0, a 13-pixel WS2812 demo configuration and GRB ordering. The base schematic lists 12 RGB packages (LED2-LED13); physical coverage was reported incomplete, so this count is not treated as proof of the unit's full ring length. ARCANA sends a uniform padded frame for up to 64 LEDs (excess data is ignored by shorter chains) using the built-in ESP-IDF RMT TX/copy encoder at 10 MHz with DMA, with WS2812 pulse timings matching the local SDK example and a 300 us low reset/latch. No additional LED library is needed.
 
-All addressed LEDs receive the same single-channel colour: 5/255 green (about 2%) for estimated battery >=30%, or 5/255 red (about 2%) below 30%. The internal DMA buffer holds the complete frame to avoid interrupt-refill timing gaps, and the symbol payload is heap-allocated in internal RAM rather than enlarging the UI task stack. Unknown readings and external USB power select off; the board cannot accurately infer cell charge from VCC_OUT while externally powered. Battery polling remains every five seconds. Only a colour change sends an LED frame; the RMT channel is disabled after each bounded transfer. Driver failures are logged and disable the ring without stopping gameplay. LED brightness is independent of backlight dimming. Runtime impact and current draw have not been measured.
+All addressed LEDs receive the same colour, at most 13/255 (about 5%): a green-yellow-red battery gradient, steady red at 10-20%, a slow red pulse below 10% and a slow blue pulse on external power (8-second cycles). The internal DMA buffer holds the complete frame to avoid interrupt-refill timing gaps, and the symbol payload is heap-allocated in internal RAM rather than enlarging the UI task stack. Unknown readings select off; the board cannot infer cell charge from VCC_OUT while externally powered, so external power always selects the blue pulse. Battery polling remains every five seconds. Only a colour change (or a pulse step, about 12 per second while pulsing) sends an LED frame; the RMT channel is disabled after each bounded transfer. Driver failures are logged and disable the ring without stopping gameplay. LED brightness is independent of backlight dimming. Runtime impact and current draw have not been measured.
 
 ## Power and battery follow-up, 2026-11-22
 
@@ -50,3 +50,13 @@ The supplied base schematic identifies an ETA6003Q3Q charger rather than an I2C 
 
 
 On 2026-11-22 the owner's power-v1 USB-guard firmware passed independent flash verification and clean boot, USB idle/reconnect diagnostics, Wi-Fi AP/scan/start/stop diagnostics, and an unplugged Single ARCANA check. The SDK's cumulative counters recorded 3,353 successful sleep intervals and 68 GPIO wakeups; the user confirmed normal wake, wheel and menu behavior. Battery-only samples were 4,126-4,136 mV (the existing approximate curve reported 92-93%). Reconnected external power activated the sleep guard. No common gauge responded at 0x36, 0x55 or 0x62. No battery-current measurement or full discharge was performed, and a second physical device was unavailable for connected-client sleep verification. Only device five received this power update; the other four retain the accepted wheel-v2 firmware.
+
+## Stability and power follow-up, 2026-11-24
+
+- LCD transfer errors/timeouts in the flush path no longer abort (reboot). The frame is dropped, a full redraw is requested and a rate-limited warning is logged.
+- The single-player match is autosaved and offered as **Resume Game** after a reset (see the firmware README).
+- Battery samples are smoothed (exponential average, 3-point rise margin) so the ring and battery icon do not flicker at thresholds.
+- Starting multiplayer below 5% battery asks for a second tap, since radio bursts on a nearly empty cell risk a brownout reset.
+- While the screen is dimmed and nothing animates, the main loop waits 500 ms instead of LVGL's ~30 ms timer period (about 2 instead of ~33 wake-ups per second). Knob/touch interrupts still end the wait immediately.
+- The unused PCM5100A DAC's XSMT pin (GPIO46, LOW = mute) is now driven low and held through light sleep instead of floating.
+- None of these power changes has been current-measured.

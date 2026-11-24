@@ -73,6 +73,9 @@ extern "C" void app_main() {
  lv_obj_set_style_text_font(screen,&lv_font_montserrat_14,0);lv_obj_remove_flag(screen,LV_OBJ_FLAG_SCROLLABLE);
  mtg::AppUI ui(game,board,screen,random,&profile,&multiplayer,&updates);
  diagnostics.ui=&ui;
+ // Autosave the single-player match so a reset or brownout can resume it.
+ mtg::FlashStorage matchStorage("/arcana/match.json");
+ if(mounted==ESP_OK)ui.setMatchStorage(&matchStorage);
  lv_timer_handler();board.takeTransferMicros();board.setBrightness(board.brightness());
  bool bootConfirmed=false;
  const auto confirmBootAt=esp_timer_get_time()/1000+5000;
@@ -83,8 +86,9 @@ extern "C" void app_main() {
  for(;;) {
   power.boost();
   uint64_t now=esp_timer_get_time()/1000;lv_tick_inc(static_cast<uint32_t>(now-previous));previous=now;
-  board.prepareInput();board.pollBattery();updates.poll();
+  board.prepareInput();board.pollBattery();board.tickRing();updates.poll();
   if(!bootConfirmed&&mounted==ESP_OK&&now>=static_cast<uint64_t>(confirmBootAt)){mtg::FirmwareUpdate::confirmBoot();bootConfirmed=true;}
+  if(board.takeRedrawRequest())lv_obj_invalidate(lv_screen_active());
   auto t=esp_timer_get_time();if(networkProbe.active())networkProbe.tick(now);else ui.update();auto u=esp_timer_get_time();uint32_t nextTimer=networkProbe.active()?20:lv_timer_handler();auto r=esp_timer_get_time();
   auto transfer=board.takeTransferMicros();
   auto transferredPixels=board.takeTransferPixels();
@@ -96,6 +100,11 @@ extern "C" void app_main() {
   power.externalPower(board.battery().externalPower||!board.battery().available);
   unsigned wait=board.touchHeld()?5:multiplayer.attached()||networkProbe.active()||updates.active()?20:50;
   wait=std::min<unsigned>(wait,nextTimer);
+  // Dimmed and nothing animating: LVGL's ~30 ms timers have nothing to do, and
+  // knob/touch interrupts end the wait immediately. 500 ms cuts idle wake-ups
+  // from ~33/s to 2/s; battery polling (5 s) and Undo expiry stay timely enough.
+  if(board.dimmed()&&!board.touchHeld()&&!board.ringAnimating()&&!ui.animating()&&!ui.lastUpdateDidWork()&&
+     !multiplayer.attached()&&!networkProbe.active()&&!updates.active())wait=500;
   power.idle();board.waitForActivity(wait);
  }
 }

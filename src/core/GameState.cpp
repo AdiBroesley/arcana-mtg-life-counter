@@ -24,14 +24,32 @@ const char* counterName(Counter counter) {
  static const char* names[]{"POISON", "ENERGY", "EXPERIENCE", "RAD", "STORM", "CUSTOM", "TREASURES", "SHIELD"};
  const auto i=static_cast<unsigned>(counter); return i<counterCount ? names[i] : "COUNTER";
 }
-bool GameState::commit(GameSnapshot next, std::string description) {
+bool GameState::commit(GameSnapshot next, std::string description, GroupKey group) {
  ScopedWork timing(profiler_,Work::HistoryRecord);
  if(next.format==GameFormat::TwoHeadedGiant){next.opponentLife[0]=next.player.life;for(unsigned seat=3;seat<next.playerCount;seat+=2)next.opponentLife[seat-1]=next.opponentLife[seat-2];}
 
  if(actionTime_) {
-  while(!recent_.empty() && (*actionTime_<recent_.front().time || *actionTime_-recent_.front().time>5000))recent_.pop_front();
+  const bool burst=!recent_.empty()&&*actionTime_>=recent_.back().time&&*actionTime_-recent_.back().time<=settleMs;
+  if(!burst)recent_.clear();
+  if(burst&&group.kind!=GroupKind::None&&group==lastGroup_&&cursor_==history_.size()&&!history_.empty()) {
+   // Fold this edit into the burst's last entry so one knob spin is one Undo step.
+   auto& entry=history_.back();entry.after=next;
+   const auto& before=entry.before;
+   std::int64_t from=0,to=0;std::string name;
+   switch(group.kind) {
+    case GroupKind::Life:from=before.player.life;to=next.player.life;name="Life ";break;
+    case GroupKind::PlayerLife:from=before.opponentLife[group.index-2];to=next.opponentLife[group.index-2];name="P"+std::to_string(group.index)+" life ";break;
+    default:from=before.player.counters[group.index];to=next.player.counters[group.index];name=std::string(counterName(static_cast<Counter>(group.index)))+" ";break;
+   }
+   std::int64_t delta=0;
+   if(from!=std::numeric_limits<std::int64_t>::min()&&sum(to,-from,delta))entry.description=name+change(delta);
+   recent_.back().time=*actionTime_;lastGroup_=group;
+   if(from==to) {history_.pop_back();recent_.pop_back();}
+   state_=std::move(next);cursor_=history_.size();++revision_;return true;
+  }
   recent_.push_back({state_,*actionTime_});
  }
+ lastGroup_=actionTime_?group:GroupKey{};
  // Bounded history: snapshots keep multi-field changes atomic, including linked life loss.
  history_.erase(history_.begin()+cursor_,history_.end());
  if(history_.size()==64) history_.erase(history_.begin());
@@ -48,7 +66,7 @@ bool GameState::startNewGame(unsigned players,GameFormat format) {
  for(unsigned owner=format==GameFormat::TwoHeadedGiant?3:2;usesCommanderDamage(format)&&owner<=players;++owner)
   for(unsigned recipient=1;recipient<=(format==GameFormat::TwoHeadedGiant?2u:1u);++recipient)
    next.sources.push_back({next.nextSourceId++,owner,"P"+std::to_string(owner)+" / COMMANDER A",0,0,recipient});
- state_=std::move(next);history_.clear();recent_.clear();cursor_=0;++revision_;return true;
+ state_=std::move(next);history_.clear();recent_.clear();lastGroup_={};cursor_=0;++revision_;return true;
 }
 void GameState::endGame() {
  if(!state_.active)return;
@@ -73,10 +91,14 @@ bool GameState::setShortcut(unsigned side,Counter counter) {
  auto next=state_;next.shortcuts[side]=counter;
  return commit(std::move(next),"Changed shortcut / "+std::string(counterName(counter)));
 }
+bool GameState::recentVisible(std::uint64_t now) const {
+ if(recent_.empty())return false;
+ const auto last=recent_.back().time;
+ return now>=last&&now-last>=settleMs&&now-last<=settleMs+undoWindowMs;
+}
 std::string GameState::recentUndoLabel(std::uint64_t now) const {
- auto it=recent_.begin();while(it!=recent_.end()&&(now<it->time||now-it->time>5000))++it;
- if(it==recent_.end())return {};
- const auto& before=it->before.player;const auto& after=state_.player;
+ if(!recentVisible(now))return {};
+ const auto& before=recent_.front().before.player;const auto& after=state_.player;
  auto delta=[](std::int64_t old,std::int64_t value){
   return value>=old?"+"+std::to_string(static_cast<std::uint64_t>(value)-static_cast<std::uint64_t>(old)):
    "-"+std::to_string(static_cast<std::uint64_t>(old)-static_cast<std::uint64_t>(value));
@@ -86,20 +108,19 @@ std::string GameState::recentUndoLabel(std::uint64_t now) const {
   unsigned changed=0,index=0;for(unsigned i=0;i<counterCount;++i)if(before.counters[i]!=after.counters[i]){++changed;index=i;}
   if(changed==1)return "Undo "+delta(before.counters[index],after.counters[index])+" "+counterName(static_cast<Counter>(index));
  }
- return "Undo "+std::to_string(static_cast<unsigned>(recent_.end()-it))+" edits";
+ return "Undo "+std::to_string(recent_.size())+" edits";
 }
 bool GameState::undoRecent(std::uint64_t now) {
  ScopedWork timing(profiler_,Work::UndoApply);
- while(!recent_.empty()&&(now<recent_.front().time||now-recent_.front().time>5000))recent_.pop_front();
- if(recent_.empty())return false;
+ if(!recentVisible(now)){if(!recent_.empty()&&(now<recent_.back().time||now-recent_.back().time>settleMs+undoWindowMs))recent_.clear();return false;}
  auto before=recent_.front().before;auto after=state_;
  auto remove=std::min(cursor_,recent_.size());history_.erase(history_.begin()+(cursor_-remove),history_.end());
- cursor_=history_.size();history_.push_back({before,std::move(after),"Five-second edit group"});
- state_=std::move(before);recent_.clear();++revision_;return true;
+ cursor_=history_.size();history_.push_back({before,std::move(after),"Grouped edit"});
+ state_=std::move(before);recent_.clear();lastGroup_={};++revision_;return true;
 }
 bool GameState::adjustLife(std::int64_t delta) {
  auto next=state_; if(!delta || !sum(next.player.life,delta,next.player.life)) return false;
- return commit(std::move(next),"Life " + change(delta));
+ return commit(std::move(next),"Life " + change(delta),{GroupKind::Life,0});
 }
 std::int64_t GameState::life(unsigned owner) const {
  if(owner<1||owner>state_.playerCount)return 0;
@@ -116,13 +137,13 @@ bool GameState::adjustPlayerLife(unsigned owner,std::int64_t delta) {
  auto next=state_;std::int64_t value;
  if(!sum(life(owner),delta,value))return false;
  for(unsigned seat=2;seat<=next.playerCount;++seat)if(next.teams[seat-1]==next.teams[owner-1])next.opponentLife[seat-2]=value;
- return commit(std::move(next),"P"+std::to_string(owner)+" life "+change(delta));
+ return commit(std::move(next),"P"+std::to_string(owner)+" life "+change(delta),{GroupKind::PlayerLife,owner});
 }
 bool GameState::adjustCounter(Counter counter, std::int64_t delta) {
  auto i=static_cast<unsigned>(counter); if(i>=counterCount || !delta) return false;
  auto next=state_; auto& value=next.player.counters[i];
  if(!sum(value,delta,value) || value<0) return false;
- return commit(std::move(next),std::string(counterName(counter))+" "+change(delta));
+ return commit(std::move(next),std::string(counterName(counter))+" "+change(delta),{GroupKind::Counter,i});
 }
 bool GameState::enableCounter(Counter counter,bool enabled) {
  auto i=static_cast<unsigned>(counter); if(i==0 || counter==Counter::Treasure || i>=counterCount || state_.player.enabled[i]==enabled) return false;
@@ -210,13 +231,13 @@ bool GameState::commanderWarning() const {
  if(!usesCommanderDamage(state_.format))return false;
  for(const auto& s:state_.sources) if(s.damage>=21) return true;return false;
 }
-bool GameState::undo() { ScopedWork timing(profiler_,Work::UndoApply);if(!canUndo()) return false;if(!recent_.empty())recent_.pop_back();state_=history_[--cursor_].before;++revision_;return true; }
+bool GameState::undo() { ScopedWork timing(profiler_,Work::UndoApply);if(!canUndo()) return false;if(!recent_.empty())recent_.pop_back();lastGroup_={};state_=history_[--cursor_].before;++revision_;return true; }
 bool GameState::redo() { ScopedWork timing(profiler_,Work::UndoApply);if(!canRedo()) return false;
  if(actionTime_) {
-  while(!recent_.empty()&&(*actionTime_<recent_.front().time||*actionTime_-recent_.front().time>5000))recent_.pop_front();
+  if(recent_.empty()||*actionTime_<recent_.back().time||*actionTime_-recent_.back().time>settleMs)recent_.clear();
   recent_.push_back({state_,*actionTime_});
  }
- state_=history_[cursor_++].after;++revision_;return true; }
+ lastGroup_={};state_=history_[cursor_++].after;++revision_;return true; }
 void GameState::reset() {
  auto next=state_;next.player.life=startingLife(next.format);next.opponentLife.fill(startingLife(next.format));next.player.counters.fill(0);
  next.player.monarch=next.player.initiative=next.player.cityBlessing=false;

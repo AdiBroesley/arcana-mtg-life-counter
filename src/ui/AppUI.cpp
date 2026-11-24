@@ -70,7 +70,27 @@ void AppUI::stepButtons(int y) {
  button(screen_,"-",74,y,70,42,Minus);button(screen_,"+",216,y,70,42,Plus);
 }
 void AppUI::navigate(View view) {if((view_==View::DimDelay||view_==View::IdleBrightness)&&view!=view_)saveDisplayDraft();if(view_==View::Brightness&&view!=View::Brightness)saveBrightness();transitionPending_=true;lifeHoldActive_=false;lifeHoldCancelled_=true;view_=view;notice_.clear();rebuild_=true;}
-void AppUI::beginArcanaSelection(View returnTo){arcanaReturn_=returnTo;hostPending_=false;navigate(View::ArcanaMode);}
+void AppUI::beginArcanaSelection(View returnTo){arcanaReturn_=returnTo;hostPending_=false;lowBatteryWarned_=false;navigate(View::ArcanaMode);}
+bool AppUI::lowBatteryForRadio()const{auto b=hardware_.battery();return b.available&&!b.externalPower&&b.percent<lowBatteryRadioPercent;}
+void AppUI::setMatchStorage(IStorage* storage){
+ matchStorage_=storage;resumeData_.clear();savedActive_=false;saveDue_=false;savedRevision_=game_.revision();
+ if(!storage)return;
+ std::string data,error;
+ if(storage->load(data,error)&&!data.empty()){GameState probe;if(probe.deserialize(data)&&probe.state().active){resumeData_=std::move(data);savedActive_=true;}}
+ if(view_==View::Startup)rebuild_=true;
+}
+void AppUI::autosaveMatch(){
+ if(!matchStorage_)return;
+ // A newly started or resumed match supersedes the one waiting to be resumed.
+ if(game_.state().active&&!resumeData_.empty()){resumeData_.clear();if(view_==View::Startup)rebuild_=true;}
+ auto now=lv_tick_get();
+ if(game_.revision()!=savedRevision_){savedRevision_=game_.revision();saveDue_=true;saveDueAt_=now+autosaveDelayMs;}
+ if(!saveDue_||static_cast<std::int32_t>(now-saveDueAt_)<0)return;
+ saveDue_=false;std::string error;
+ const bool eligible=game_.state().active&&!(multiplayer_&&multiplayer_->attached());
+ if(eligible){if(matchStorage_->save(game_.serializeSnapshot(),error))savedActive_=true;}
+ else if(savedActive_&&resumeData_.empty()){if(matchStorage_->save("",error))savedActive_=false;}
+}
 void AppUI::beginFormatSelection(View returnTo) {formatReturn_=returnTo;draftFormat_=game_.state().format;draftPlayers_=draftFormat_==GameFormat::Commander||draftFormat_==GameFormat::TwoHeadedGiant?4:2;navigate(View::FormatSelect);}
 void AppUI::requestNewGame() {if(game_.state().active){formatReturn_=View::Home;navigate(View::ResetConfirm);}else beginArcanaSelection(View::Startup);}
 void AppUI::goHome() {selectedPlayer_=1;navigate(game_.state().active?View::Home:View::Startup);}
@@ -105,7 +125,14 @@ void AppUI::handle(Action action,std::uint32_t arg) {
   case InstallUpdate:if(updates_)updates_->install();break;
   case SetupWifi:if(updates_){updates_->setup();navigate(View::WifiSetup);}break;
   case SingleArcana:hostPending_=false;beginFormatSelection(View::ArcanaMode);break;
-  case MultiArcana:nameDraft_=profile_->name();nameSymbols_=false;navigate(View::NameSetup);break;
+  case MultiArcana:
+   // Radio bursts on a nearly empty cell can brown out the board mid-game.
+   if(lowBatteryForRadio()&&!lowBatteryWarned_){lowBatteryWarned_=true;rebuild_=true;break;}
+   lowBatteryWarned_=false;nameDraft_=profile_->name();nameSymbols_=false;navigate(View::NameSetup);break;
+  case ResumeGame:
+   if(!resumeData_.empty()&&game_.deserialize(resumeData_)){resumeData_.clear();goHome();}
+   else {resumeData_.clear();rebuild_=true;}
+   break;
   case NameKey:if(nameDraft_.size()<12)nameDraft_+=static_cast<char>(arg);break;
   case NameChange:nameDraft_.clear();notice_.clear();break;
   case NameDelete:if(!nameDraft_.empty())nameDraft_.pop_back();break;
@@ -455,7 +482,8 @@ void AppUI::update() {
  if(view_==View::Brightness && value_ && std::to_string(hardware_.brightness())+"%"!=lv_label_get_text(value_))refreshDirty_=true;
  bool wantIdle=profile_->displaySettings().lifeOnly&&hardware_.idle()&&game_.state().active&&view_==View::Home&&selectedPlayer_==1;
  if(wantIdle!=idleLifeView_&&(wantIdle||(!hardware_.touch().pressed&&!lifeHoldActive_))){idleLifeView_=wantIdle;transitionPending_=false;transitionActive_=false;rebuild_=true;}
- if(view_==View::Home&&!idleLifeView_){refreshBattery();if(selectedPlayer_==1){auto undo=game_.recentUndoLabel(lv_tick_get());if((undo.empty()?"Undo":undo)!=undoCurvedText_)refreshDirty_=true;}}
+ if(view_==View::Home&&!idleLifeView_){refreshBattery();if(selectedPlayer_==1){auto undo=game_.recentUndoLabel(lv_tick_get());if((undo.empty()?"Undo":undo)!=undoCurvedText_||(undo_&&undo.empty()&&!hardware_.touch().pressed&&!lv_obj_has_state(undo_,LV_STATE_DISABLED)))refreshDirty_=true;}}
+ autosaveMatch();
  if(rebuild_){build();refreshDirty_=true;lastUpdateWork_=true;}
  if(refreshDirty_){refresh();refreshDirty_=false;lastUpdateWork_=true;}
  if(transitionActive_)lastUpdateWork_=true;
