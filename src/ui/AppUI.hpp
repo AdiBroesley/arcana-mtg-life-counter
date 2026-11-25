@@ -37,6 +37,8 @@ public:
  void setMatchStorage(IStorage* storage);
  bool canResume()const{return !resumeData_.empty();}
  // Launcher firmware: show "Apps" on the start screen and call this when tapped.
+ // Start-screen branding for launcher apps that reuse this UI.
+ void setTitle(std::string title,std::string subtitle){title_=std::move(title);subtitle_=std::move(subtitle);if(view_==View::Startup)rebuild_=true;}
  void setExitHandler(std::function<void()> handler){exitHandler_=std::move(handler);if(view_==View::Startup)rebuild_=true;}
  static constexpr std::uint32_t autosaveDelayMs=2000;
  // Starting multiplayer below this battery level asks for a second tap first.
@@ -143,6 +145,7 @@ private:
  bool lowBatteryWarned_=false;
  std::function<void()> exitHandler_;
  IHomeFace* homeFace_=nullptr;
+ std::string title_="A R C A N A",subtitle_="LIFE COUNTER";
  bool customHome()const{return homeFace_&&view_==View::Home&&selectedPlayer_==1;}
  // HomeFaceHost
  const GameState& game()const override{return game_;}

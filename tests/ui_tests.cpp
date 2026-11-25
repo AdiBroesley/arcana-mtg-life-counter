@@ -502,6 +502,7 @@ int main() {
   click("Close");tick(5);check(find(lv_screen_active(),"STUB FACE"),"poison returns to the face");
   face.host->openMenu();tick(5);click("ComDmg");tick(5);check(!find(lv_screen_active(),"STUB FACE")&&find(lv_screen_active(),"Back"),"menu opens commander damage");
   click("Back");tick(5);check(find(lv_screen_active(),"STUB FACE"),"commander damage returns to the face");
+  faceUI.setTitle("M L C","MAGIC LIFE COUNTER");faceUI.showStartup();tick(5);check(find(lv_screen_active(),"M L C")&&find(lv_screen_active(),"MAGIC LIFE COUNTER")&&!find(lv_screen_active(),"A R C A N A"),"launcher apps can brand the start screen");
   faceGame.startNewGame(2,mtg::GameFormat::Classic);faceUI.goHome();tick(5);face.host->openMenu();tick(5);
   check(!find(lv_screen_active(),"ComDmg")&&find(lv_screen_active(),"Poison"),"no commander entry without commander damage");
   click("Back");tick(5);check(find(lv_screen_active(),"STUB FACE"),"menu Back returns to the face");

@@ -91,8 +91,8 @@ void AppUI::playerTabs() {
 }
 void AppUI::buildLifecycle() {
  if(view_==View::Startup) {
-  label(screen_,"A R C A N A",65,67,230,&lv_font_montserrat_20,violet);
-  label(screen_,"LIFE COUNTER",55,103,250,&lv_font_montserrat_14,muted);
+  label(screen_,title_,65,67,230,&lv_font_montserrat_20,violet);
+  label(screen_,subtitle_,55,103,250,&lv_font_montserrat_14,muted);
   if(canResume()||exitHandler_) {
    // A saved match survived a reset: offer it first, keep New Game one tap away.
    // Inside a launcher, "Apps" joins the bottom row.

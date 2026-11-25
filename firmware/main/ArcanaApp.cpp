@@ -74,9 +74,11 @@ void runArcana(DevicePlatform& platform,const ArcanaOptions& options) {
  lv_obj_set_style_text_font(screen,&lv_font_montserrat_14,0);lv_obj_remove_flag(screen,LV_OBJ_FLAG_SCROLLABLE);
  AppUI ui(game,board,screen,random,&profile,&multiplayer,&updates);
  if(options.exitToLauncher)ui.setExitHandler(options.exitToLauncher);
+ if(options.homeFace)ui.setHomeFace(options.homeFace);
+ if(options.title)ui.setTitle(options.title,options.subtitle?options.subtitle:"");
  diagnostics.ui=&ui;
  // Autosave the single-player match so a reset or brownout can resume it.
- FlashStorage matchStorage("/arcana/match.json");
+ FlashStorage matchStorage(options.matchFile);
  if(mounted==ESP_OK)ui.setMatchStorage(&matchStorage);
  lv_timer_handler();board.takeTransferMicros();board.setBrightness(board.brightness());
  bool bootConfirmed=false;
