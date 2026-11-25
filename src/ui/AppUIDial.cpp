@@ -141,6 +141,7 @@ void AppUI::refreshLifecycle() {
  if(view_==View::PlayerSetup){text(value_,draftFormat_==GameFormat::TwoHeadedGiant?std::to_string(draftPlayers_/2)+" Teams / "+std::to_string(draftPlayers_)+"P":std::to_string(draftPlayers_)+"-Players");if(hint_)text(hint_,notice_);}
 }
 void AppUI::buildDial() {
+ if(homeFace_&&selectedPlayer_==1){homeFace_->build(screen_,*this);return;}
  if(idleLifeView_){buildIdleDial();return;}
  if(selectedPlayer_==1&&redesignedFace(faceDesign_)){buildFaceLayout();return;}
  if(selectedPlayer_==1)playerTabs();
@@ -422,6 +423,7 @@ void AppUI::refreshBattery() {
  if(state<0)part(9,6,6,1,muted);
 }
 void AppUI::refreshDial() {
+ if(homeFace_&&selectedPlayer_==1){homeFace_->refresh(*this);return;}
  if(idleLifeView_){refreshIdleDial();return;}
  refreshBattery();
  refreshTabs();

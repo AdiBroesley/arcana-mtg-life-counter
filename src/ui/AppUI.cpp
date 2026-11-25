@@ -71,6 +71,21 @@ void AppUI::stepButtons(int y) {
 }
 void AppUI::navigate(View view) {if((view_==View::DimDelay||view_==View::IdleBrightness)&&view!=view_)saveDisplayDraft();if(view_==View::Brightness&&view!=View::Brightness)saveBrightness();transitionPending_=true;lifeHoldActive_=false;lifeHoldCancelled_=true;view_=view;notice_.clear();rebuild_=true;}
 void AppUI::beginArcanaSelection(View returnTo){arcanaReturn_=returnTo;hostPending_=false;lowBatteryWarned_=false;navigate(View::ArcanaMode);}
+std::vector<HomeOpponent> AppUI::opponents()const{
+ std::vector<HomeOpponent> result;
+ if(networkFace()){
+  for(const auto& peer:multiplayer_->opponents()){HomeOpponent o;o.seat=peer.seat;o.name=peer.id.empty()?"Open seat":peer.name;o.life=peer.life;o.online=peer.online;o.editable=peer.id.empty();result.push_back(o);}
+  return result;
+ }
+ for(unsigned seat=2;seat<=game_.state().playerCount;++seat){HomeOpponent o;o.seat=seat;o.name="P"+std::to_string(seat);o.life=game_.life(seat);o.editable=true;result.push_back(o);}
+ return result;
+}
+bool AppUI::adjustOwnLife(std::int64_t delta){game_.setActionTime(lv_tick_get());bool ok=game_.adjustLife(delta);refreshDirty_=true;return ok;}
+bool AppUI::adjustOpponentLife(unsigned seat,std::int64_t delta){
+ game_.setActionTime(lv_tick_get());refreshDirty_=true;
+ if(networkFace()){for(const auto& peer:multiplayer_->opponents())if(peer.seat==seat&&peer.id.empty())return multiplayer_->adjustOpenSeat(seat,delta);return false;}
+ return game_.adjustPlayerLife(seat,delta);
+}
 bool AppUI::lowBatteryForRadio()const{auto b=hardware_.battery();return b.available&&!b.externalPower&&b.percent<lowBatteryRadioPercent;}
 void AppUI::setMatchStorage(IStorage* storage){
  matchStorage_=storage;resumeData_.clear();savedActive_=false;saveDue_=false;savedRevision_=game_.revision();
@@ -200,7 +215,7 @@ void AppUI::handle(Action action,std::uint32_t arg) {
   case OpenProfiles:navigate(View::Profiles);break;
   case OpenStatus:navigate(View::Status);break;
   case OpenHistory:navigate(View::History);break;
-  case Undo:notice_=game_.undo()?"Action undone":"Nothing to undo";rebuild_=true;break;
+  case Undo:notice_=game_.undo()?"Action undone":"Nothing to undo";if(homeFace_&&view_==View::Gear)goHome();else rebuild_=true;break;
   case Redo:notice_=game_.redo()?"Action restored":"Nothing to redo";rebuild_=true;break;
   case Source:sourceId_=arg;pending_=1;navigate(View::Damage);break;
   case Own:ownIndex_=arg;navigate(View::Casts);break;
@@ -241,7 +256,7 @@ void AppUI::adjust(std::int64_t delta) {
   case View::ContactCode:case View::About:case View::Updates:case View::WifiSetup:case View::Startup:case View::ArcanaMode:case View::NameSetup:case View::Connection:case View::HostJoin:case View::BrowseGames:case View::NetworkLobby:case View::FormatSelect:case View::EndConfirm:break;
   case View::PlayerSetup:if(draftFormat_==GameFormat::TwoHeadedGiant)draftPlayers_=2*static_cast<unsigned>(std::clamp<std::int64_t>(draftPlayers_/2+std::clamp<std::int64_t>(delta,-6,6),2,6));else if(draftFormat_==GameFormat::Commander||draftFormat_==GameFormat::Classic)draftPlayers_=static_cast<unsigned>(std::clamp<std::int64_t>(draftPlayers_+std::clamp<std::int64_t>(delta,-6,6),2,6));break;
   case View::Home:
-   if(selectedPlayer_==1)ok=game_.adjustLife(delta);
+   if(selectedPlayer_==1){if(homeFace_&&homeFace_->rotate(*this,delta))break;ok=game_.adjustLife(delta);}
    else if(networkFace()){auto peers=multiplayer_->opponents();if(selectedPlayer_-2<peers.size()&&peers[selectedPlayer_-2].id.empty())ok=multiplayer_->adjustOpenSeat(peers[selectedPlayer_-2].seat,delta);break;}
    else if(!usesCommanderDamage(game_.state().format))ok=game_.adjustPlayerLife(selectedPlayer_,delta);
    else {const auto* s=game_.source(sourceId_);if(s && delta<0 && delta < -s->damage)delta=-s->damage;ok=game_.adjustCommanderDamage(sourceId_,delta,subtractLife_);}break;
@@ -481,9 +496,10 @@ void AppUI::update() {
  if(brightnessNow!=observedBrightness_){observedBrightness_=brightnessNow;brightnessChangedAt_=lv_tick_get();brightnessPending_=true;}
  if(brightnessPending_&&lv_tick_get()-brightnessChangedAt_>=750)saveBrightness();
  if(view_==View::Brightness && value_ && std::to_string(hardware_.brightness())+"%"!=lv_label_get_text(value_))refreshDirty_=true;
- bool wantIdle=profile_->displaySettings().lifeOnly&&hardware_.idle()&&game_.state().active&&view_==View::Home&&selectedPlayer_==1;
+ bool wantIdle=!homeFace_&&profile_->displaySettings().lifeOnly&&hardware_.idle()&&game_.state().active&&view_==View::Home&&selectedPlayer_==1;
  if(wantIdle!=idleLifeView_&&(wantIdle||(!hardware_.touch().pressed&&!lifeHoldActive_))){idleLifeView_=wantIdle;transitionPending_=false;transitionActive_=false;rebuild_=true;}
- if(view_==View::Home&&!idleLifeView_){refreshBattery();if(selectedPlayer_==1){auto undo=game_.recentUndoLabel(lv_tick_get());if((undo.empty()?"Undo":undo)!=undoCurvedText_||(undo_&&undo.empty()&&!hardware_.touch().pressed&&!lv_obj_has_state(undo_,LV_STATE_DISABLED)))refreshDirty_=true;}}
+ if(customHome())homeFace_->tick(*this,lv_tick_get());
+ if(view_==View::Home&&!idleLifeView_&&!customHome()){refreshBattery();if(selectedPlayer_==1){auto undo=game_.recentUndoLabel(lv_tick_get());if((undo.empty()?"Undo":undo)!=undoCurvedText_||(undo_&&undo.empty()&&!hardware_.touch().pressed&&!lv_obj_has_state(undo_,LV_STATE_DISABLED)))refreshDirty_=true;}}
  autosaveMatch();
  if(rebuild_){build();refreshDirty_=true;lastUpdateWork_=true;}
  if(refreshDirty_){refresh();refreshDirty_=false;lastUpdateWork_=true;}

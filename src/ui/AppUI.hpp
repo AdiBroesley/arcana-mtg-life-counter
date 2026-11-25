@@ -10,8 +10,9 @@
 #include <deque>
 #include <functional>
 #include "FaceLayouts.hpp"
+#include "HomeFace.hpp"
 namespace mtg {
-class AppUI {
+class AppUI : private HomeFaceHost {
 public:
  AppUI(GameState& game,IHardware& hardware,lv_obj_t* screen,IRandom& random,DeviceProfile* profile=nullptr,Multiplayer* multiplayer=nullptr,IFirmwareUpdate* updates=nullptr);
  void update();
@@ -27,7 +28,9 @@ public:
  FaceLayout faceLayoutGeometry()const{return redesignedFace(faceDesign_)?activeFaceLayout_:mtg::faceLayout(faceDesign_);}
  bool faceControlsFit()const;
  bool lifeOnlyIdle()const{return idleLifeView_;}
- bool animating()const{return transitionActive_||transitionPending_;}
+ bool animating()const{return transitionActive_||transitionPending_||(homeFace_&&homeFace_->animating());}
+ // Replace the single-player main face (see HomeFace.hpp). Pass nullptr to restore ARCANA's.
+ void setHomeFace(IHomeFace* face){homeFace_=face;if(face)idleLifeView_=false;rebuild_=true;}
  // Device firmware: autosave the active single-player match (2 s after the last
  // change) and offer Resume on the start screen after a reset. Undo history is
  // not saved. Multiplayer matches are not saved.
@@ -139,6 +142,15 @@ private:
  std::uint64_t savedRevision_=0;std::uint32_t saveDueAt_=0;bool saveDue_=false,savedActive_=false;
  bool lowBatteryWarned_=false;
  std::function<void()> exitHandler_;
+ IHomeFace* homeFace_=nullptr;
+ bool customHome()const{return homeFace_&&view_==View::Home&&selectedPlayer_==1;}
+ // HomeFaceHost
+ const GameState& game()const override{return game_;}
+ std::vector<HomeOpponent> opponents()const override;
+ const FaceDesign& palette()const override{return faceDesigns[faceDesign_<faceDesigns.size()?faceDesign_:0];}
+ bool adjustOwnLife(std::int64_t delta)override;
+ bool adjustOpponentLife(unsigned seat,std::int64_t delta)override;
+ void openMenu()override{navigate(View::Gear);}
  void autosaveMatch();
  bool lowBatteryForRadio()const;
  std::uint32_t transitionStarted_=0,transitionFrame_=0;

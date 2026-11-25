@@ -4,6 +4,8 @@
 #include "Widgets/DialWidgets.hpp"
 #include "src/core/lv_obj_event_private.h"
 #include <cmath>
+#include <tuple>
+#include <vector>
 namespace mtg {
 using namespace widgets;
 void AppUI::toolSectorHit(lv_event_t* event) {
@@ -35,7 +37,24 @@ void AppUI::radialBack(Action action) {
  lv_obj_set_style_text_color(lv_obj_get_child(back,0),lv_color_hex(0xaaaaaa),0);
 }
 void AppUI::buildTools() {
- if(view_==View::Gear) {
+ if(view_==View::Gear&&homeFace_) {
+  // A replacement home face has no counter shortcuts, player tabs or Undo arc:
+  // the menu carries Undo, Poison and commander damage instead.
+  const bool commander=usesCommanderDamage(game_.state().format)&&game_.state().playerCount>1;
+  std::vector<std::tuple<const char*,Action,std::uint32_t,ToolIcon,unsigned>> items{
+   {"Undo",Undo,0,ToolIcon::Reset,0x3c5261},{"Poison",OpenCounter,static_cast<std::uint32_t>(Counter::Poison),ToolIcon::Poison,0x5a8a3a}};
+  if(commander)items.push_back({"ComDmg",SelectPlayer,2,ToolIcon::Shield,violet});
+  items.push_back({"Flip Coin",FlipCoin,0,ToolIcon::Coin,gold});items.push_back({"Roll",RollD20,0,ToolIcon::D20,violet});
+  items.push_back({"Display",OpenDisplay,0,ToolIcon::Brightness,teal});items.push_back({"Colors",OpenFaces,0,ToolIcon::WatchFace,0x496c92});
+  items.push_back({"End Game",RequestEnd,0,ToolIcon::End,red});
+  const auto count=static_cast<unsigned>(items.size());
+  for(unsigned i=0;i<count;++i){
+   auto& [title,action,arg,icon,color]=items[i];auto* tile=radialSector(title,i,count,action,arg,color,icon);
+   // Pull captions in the rightmost slice inwards so they are not clipped by the ring.
+   const double theta=(270+360.0/count*i)*3.141592653589793/180;
+   if(std::cos(theta)>0.9){auto* caption=lv_obj_get_child(tile,1);lv_obj_set_x(caption,static_cast<int>(150+(count>=7?112:100)*std::cos(theta))-49-16);}
+  }
+ }else if(view_==View::Gear) {
   const char* titles[]{"New Game","Flip Coin","Roll","End Game","Display","Watch Face"};
   const Action actions[]{AskReset,FlipCoin,RollD20,RequestEnd,OpenDisplay,OpenFaces};
   const ToolIcon icons[]{ToolIcon::Reset,ToolIcon::Coin,ToolIcon::D20,ToolIcon::End,ToolIcon::Brightness,ToolIcon::WatchFace};

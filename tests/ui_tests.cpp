@@ -476,6 +476,35 @@ int main() {
   check(find(lv_screen_active(),"Apps")&&find(lv_screen_active(),"Resume Game")&&find(lv_screen_active(),"New Game")&&find(lv_screen_active(),"Update")&&find(lv_screen_active(),"About"),"inside a launcher the start screen adds Apps");
   screenshot("ui-startup-launcher.bmp");
   click("Apps");check(exited&&!launched.state().active,"Apps returns to the launcher");
+  // Replacement home face (used by the MLC launcher firmware).
+  struct StubFace final:mtg::IHomeFace{
+   int builds=0,ticks=0;std::int64_t rotated=0;bool claim=false;mtg::HomeFaceHost* host=nullptr;
+   void build(lv_obj_t* screen,mtg::HomeFaceHost& h)override{++builds;host=&h;auto* l=lv_label_create(screen);lv_label_set_text(l,"STUB FACE");}
+   void refresh(mtg::HomeFaceHost&)override{}
+   bool rotate(mtg::HomeFaceHost&,std::int64_t d)override{if(!claim)return false;rotated+=d;return true;}
+   void tick(mtg::HomeFaceHost&,std::uint32_t)override{++ticks;}
+  } face;
+  mtg::GameState faceGame;faceGame.startNewGame(4,mtg::GameFormat::Commander);
+  mtg::AppUI faceUI(faceGame,hardware,device,random);app=&faceUI;faceUI.setHomeFace(&face);faceUI.goHome();tick(5);
+  check(face.builds>0&&face.ticks>0&&find(lv_screen_active(),"STUB FACE")&&!find(lv_screen_active(),LV_SYMBOL_SETTINGS)&&!find(lv_screen_active(),"Undo"),"a home face replaces the main face, its gear button and Undo arc");
+  rotate(-3);check(faceGame.player().life==37,"unclaimed knob turns change own life");
+  face.claim=true;rotate(2);check(faceGame.player().life==37&&face.rotated==2,"a face can claim knob turns");face.claim=false;
+  auto others=face.host->opponents();
+  check(others.size()==3&&others[0].seat==2&&others[0].name=="P2"&&others[2].life==40&&others[1].editable,"host lists local opponents");
+  check(face.host->adjustOpponentLife(3,-5)&&faceGame.life(3)==35,"host edits a local opponent's life");
+  check(std::string(face.host->palette().name)==mtg::faceDesigns[0].name,"host exposes the selected colour scheme");
+  tick(40);check(face.host->adjustOwnLife(1)&&faceGame.player().life==38,"host edits own life");
+  face.host->openMenu();tick(5);
+  check(find(lv_screen_active(),"Undo")&&find(lv_screen_active(),"Poison")&&find(lv_screen_active(),"ComDmg")&&find(lv_screen_active(),"Colors")&&find(lv_screen_active(),"End Game")&&!find(lv_screen_active(),"Watch Face")&&!find(lv_screen_active(),"New Game"),"home-face menu offers Undo, Poison and Commander");
+  screenshot("ui-homeface-menu.bmp");
+  click("Undo");tick(5);check(faceGame.player().life==37&&find(lv_screen_active(),"STUB FACE"),"menu Undo reverts the last edit and returns to the face");
+  face.host->openMenu();tick(5);click("Poison");tick(5);check(find(lv_screen_active(),"POISON"),"menu opens the poison counter");
+  click("Close");tick(5);check(find(lv_screen_active(),"STUB FACE"),"poison returns to the face");
+  face.host->openMenu();tick(5);click("ComDmg");tick(5);check(!find(lv_screen_active(),"STUB FACE")&&find(lv_screen_active(),"Back"),"menu opens commander damage");
+  click("Back");tick(5);check(find(lv_screen_active(),"STUB FACE"),"commander damage returns to the face");
+  faceGame.startNewGame(2,mtg::GameFormat::Classic);faceUI.goHome();tick(5);face.host->openMenu();tick(5);
+  check(!find(lv_screen_active(),"ComDmg")&&find(lv_screen_active(),"Poison"),"no commander entry without commander damage");
+  click("Back");tick(5);check(find(lv_screen_active(),"STUB FACE"),"menu Back returns to the face");
   app=&ui;
  }
  lv_deinit();std::cout<<"All round-screen counter interaction checks passed\n";
